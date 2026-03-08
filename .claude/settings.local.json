@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npx tsc --noEmit --pretty)",
+      "Bash(npx tsx src/scrape.ts)"
+    ]
+  }
+}

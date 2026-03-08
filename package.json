@@ -1,0 +1,11 @@
+{
+  "name": "cenovypad",
+  "version": "1.0.0",
+  "private": true,
+  "workspaces": ["scraper", "web", "alerts"],
+  "scripts": {
+    "scraper": "npm run start --workspace=scraper",
+    "web": "npm run dev --workspace=web",
+    "alerts": "npm run start --workspace=alerts"
+  }
+}
