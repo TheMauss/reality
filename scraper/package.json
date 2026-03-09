@@ -4,7 +4,8 @@
   "private": true,
   "scripts": {
     "start": "tsx src/index.ts",
-    "scrape-once": "tsx src/scrape.ts"
+    "scrape-once": "tsx src/scrape.ts",
+    "scrape-sold": "tsx src/scrape-sold.ts"
   },
   "dependencies": {
     "better-sqlite3": "^12.6.2",
