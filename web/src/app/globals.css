@@ -1,16 +1,18 @@
 @import "tailwindcss";
 
 :root {
-  --background: #0f1117;
-  --foreground: #e5e7eb;
-  --card: #1a1d27;
-  --card-hover: #222633;
-  --border: #2a2e3d;
+  --background: #0b0d15;
+  --foreground: #e4e6f0;
+  --card: #12141e;
+  --card-hover: #1a1d2c;
+  --card-active: #1e2134;
+  --border: #22253a;
   --accent: #6366f1;
   --accent-light: #818cf8;
   --green: #22c55e;
   --red: #ef4444;
-  --muted: #6b7280;
+  --muted: #5a6070;
+  --muted-light: #7a8090;
 }
 
 @theme inline {
@@ -18,6 +20,7 @@
   --color-foreground: var(--foreground);
   --color-card: var(--card);
   --color-card-hover: var(--card-hover);
+  --color-card-active: var(--card-active);
   --color-border: var(--border);
   --color-accent: var(--accent);
   --color-accent-light: var(--accent-light);
@@ -28,20 +31,65 @@
   --font-mono: var(--font-geist-mono);
 }
 
+html {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
 body {
   background: var(--background);
   color: var(--foreground);
   font-family: var(--font-sans), system-ui, sans-serif;
+  /* Subtle ambient light */
+  background-image:
+    radial-gradient(ellipse at 15% 0%, rgba(99,102,241,0.04) 0%, transparent 55%),
+    radial-gradient(ellipse at 85% 100%, rgba(139,92,246,0.03) 0%, transparent 55%);
+  background-attachment: fixed;
 }
 
-/* Custom scrollbar */
-::-webkit-scrollbar {
-  width: 6px;
+/* ── Scrollbar ─────────────────────────────────────────────── */
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 99px; }
+::-webkit-scrollbar-thumb:hover { background: var(--muted); }
+
+/* ── Transitions ───────────────────────────────────────────── */
+*, *::before, *::after {
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
 }
-::-webkit-scrollbar-track {
-  background: var(--background);
+
+/* ── Utilities ─────────────────────────────────────────────── */
+.line-clamp-1 {
+  display: -webkit-box;
+  -webkit-line-clamp: 1;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
-::-webkit-scrollbar-thumb {
-  background: var(--border);
-  border-radius: 3px;
+.line-clamp-2 {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.line-clamp-3 {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* Gradient text utility */
+.text-gradient {
+  background: linear-gradient(135deg, var(--accent-light), #a78bfa, #f472b6);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* Glass surface */
+.glass {
+  background: rgba(18, 20, 30, 0.8);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
 }

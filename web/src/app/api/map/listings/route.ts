@@ -14,21 +14,25 @@ export async function GET(req: NextRequest) {
   const sp = req.nextUrl.searchParams;
   const category = sp.get("category") || "";
   const location = sp.get("location") || "";
+  const minPrice = parseInt(sp.get("min_price") || "0", 10);
+  const maxPrice = parseInt(sp.get("max_price") || "0", 10);
+  const minArea = parseInt(sp.get("min_area") || "0", 10);
+  const maxArea = parseInt(sp.get("max_area") || "0", 10);
+  const layout = sp.get("layout") || "";
   const limit = Math.min(parseInt(sp.get("limit") || "500", 10), 2000);
 
   const db = getDB();
 
-  let where = "WHERE lat IS NOT NULL AND lon IS NOT NULL";
+  let where = "WHERE lat IS NOT NULL AND lon IS NOT NULL AND removed_at IS NULL";
   const params: (string | number)[] = [];
 
-  if (category) {
-    where += " AND category = ?";
-    params.push(category);
-  }
-  if (location) {
-    where += " AND location LIKE ?";
-    params.push(`%${location}%`);
-  }
+  if (category) { where += " AND category = ?"; params.push(category); }
+  if (location) { where += " AND location LIKE ?"; params.push(`%${location}%`); }
+  if (minPrice) { where += " AND price >= ?"; params.push(minPrice); }
+  if (maxPrice) { where += " AND price <= ?"; params.push(maxPrice); }
+  if (minArea)  { where += " AND area_m2 >= ?"; params.push(minArea); }
+  if (maxArea)  { where += " AND area_m2 <= ?"; params.push(maxArea); }
+  if (layout)   { where += " AND title LIKE ?"; params.push(`%${layout}%`); }
 
   const listings = db
     .prepare(

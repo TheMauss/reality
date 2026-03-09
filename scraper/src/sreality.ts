@@ -41,7 +41,6 @@ export interface ParsedListing {
 
 // category_main_cb: 1=byty, 2=domy, 3=pozemky, 4=komerční, 5=ostatní
 // category_type_cb: 1=prodej, 2=nájem
-// category_sub_cb: sub-categories for byty/domy (used to break large result sets)
 const BYT_SUBS = [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 16]; // 1+kk,1+1,...,6+,atypicky
 const DUM_SUBS = [37, 39, 43, 44, 33, 54]; // rodinny,vila,chalupa,chata,na-klic,vicegeneracni
 
@@ -49,18 +48,14 @@ interface SearchConfig {
   main: number;
   type: number;
   label: string;
-  sub?: number; // category_sub_cb for breaking down large categories
+  sub?: number;
 }
 
-// Build configs: byty/domy split by sub-category for more complete results
 const SEARCH_CONFIGS: SearchConfig[] = [
-  // Byty — split by sub to get past 2000-result limit
   ...BYT_SUBS.map(sub => ({ main: 1, type: 1, label: "byty-prodej", sub })),
   ...BYT_SUBS.map(sub => ({ main: 1, type: 2, label: "byty-najem", sub })),
-  // Domy — split by sub
   ...DUM_SUBS.map(sub => ({ main: 2, type: 1, label: "domy-prodej", sub })),
   ...DUM_SUBS.map(sub => ({ main: 2, type: 2, label: "domy-najem", sub })),
-  // Pozemky, komerční, ostatní — no sub needed (smaller categories)
   { main: 3, type: 1, label: "pozemky-prodej" },
   { main: 3, type: 2, label: "pozemky-najem" },
   { main: 4, type: 1, label: "komercni-prodej" },
@@ -69,7 +64,18 @@ const SEARCH_CONFIGS: SearchConfig[] = [
   { main: 5, type: 2, label: "ostatni-najem" },
 ];
 
-// All 14 Czech regions
+// Fast scan configs: no sub-category filter so each request covers the whole category.
+// Sreality sorts by "trideni=2" (newest/last-updated first), so repriced listings
+// bubble to the top alongside new ones — both get caught.
+const FAST_SCAN_CONFIGS: SearchConfig[] = [
+  { main: 1, type: 1, label: "byty-prodej" },
+  { main: 1, type: 2, label: "byty-najem" },
+  { main: 2, type: 1, label: "domy-prodej" },
+  { main: 2, type: 2, label: "domy-najem" },
+  { main: 3, type: 1, label: "pozemky-prodej" },
+  { main: 4, type: 1, label: "komercni-prodej" },
+];
+
 const REGIONS = [
   { id: 1, name: "Jihočeský" },
   { id: 2, name: "Plzeňský" },
@@ -89,7 +95,10 @@ const REGIONS = [
 
 const BASE_URL = "https://www.sreality.cz/api/cs/v2/estates";
 const PER_PAGE = 60;
-const MAX_PAGES = 100; // ~6000 listings per category per region (Sreality caps at ~2000 but some categories are larger)
+const MAX_PAGES = 33;              // Sreality hard cap ~2000 results per query
+const MAX_RESULT_SIZE = PER_PAGE * MAX_PAGES; // 1980
+const PRICE_MAX = 999_999_999;     // 1B CZK practical upper bound
+const MAX_SPLIT_DEPTH = 8;         // 2^8 = 256 sub-buckets per range — enough for any district
 
 function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -101,7 +110,6 @@ function extractArea(estate: SrealityEstate): number | null {
   return null;
 }
 
-// Maps category_sub_cb to the URL slug used by Sreality
 const BYT_SUB_SLUGS: Record<number, string> = {
   2: "1+kk", 3: "1+1", 4: "2+kk", 5: "2+1",
   6: "3+kk", 7: "3+1", 8: "4+kk", 9: "4+1",
@@ -149,6 +157,9 @@ async function fetchPage(
   page: number,
   categorySub?: number,
   districtId?: number,
+  priceFrom?: number,
+  priceTo?: number,
+  sort?: number, // trideni: 0=default, 2=newest/last-updated first
 ): Promise<SrealityResponse> {
   const params = new URLSearchParams({
     category_main_cb: categoryMain.toString(),
@@ -156,7 +167,6 @@ async function fetchPage(
     per_page: PER_PAGE.toString(),
     page: page.toString(),
   });
-  // Use district-level filter if available, otherwise region
   if (districtId) {
     params.set("locality_district_id", districtId.toString());
   } else {
@@ -165,6 +175,9 @@ async function fetchPage(
   if (categorySub) {
     params.set("category_sub_cb", categorySub.toString());
   }
+  if (priceFrom !== undefined) params.set("price_from", priceFrom.toString());
+  if (priceTo !== undefined) params.set("price_to", priceTo.toString());
+  if (sort !== undefined) params.set("trideni", sort.toString());
 
   const url = `${BASE_URL}?${params}`;
 
@@ -198,16 +211,90 @@ async function fetchPage(
   throw new Error(`Failed after retries: ${url}`);
 }
 
+/**
+ * Scrape a single category+locality+price_range bucket.
+ * If result_size > Sreality's cap, recursively splits by price range (binary search)
+ * until each sub-bucket fits within the API limit.
+ */
+async function scrapeBucket(
+  config: SearchConfig,
+  regionId: number,
+  districtId: number | undefined,
+  priceFrom: number,
+  priceTo: number,
+  depth: number,
+): Promise<SrealityEstate[]> {
+  const firstData = await fetchPage(config.main, config.type, regionId, 1, config.sub, districtId, priceFrom, priceTo);
+  const resultSize = firstData.result_size || 0;
+  const firstEstates = firstData._embedded?.estates || [];
+
+  // If over cap and can still split, recurse with halved price ranges
+  if (resultSize > MAX_RESULT_SIZE && depth < MAX_SPLIT_DEPTH) {
+    const mid = Math.floor((priceFrom + priceTo) / 2);
+    if (mid > priceFrom && mid < priceTo) {
+      const lower = await scrapeBucket(config, regionId, districtId, priceFrom, mid, depth + 1);
+      const upper = await scrapeBucket(config, regionId, districtId, mid + 1, priceTo, depth + 1);
+      return [...lower, ...upper];
+    }
+    console.warn(`  ⚠ Price range ${priceFrom}-${priceTo} unsplittable, result_size=${resultSize} — accepting truncation`);
+  }
+
+  // Paginate all available pages
+  const results: SrealityEstate[] = [...firstEstates];
+  let page = 2;
+  let hasMore = firstEstates.length === PER_PAGE;
+
+  while (hasMore && page <= MAX_PAGES) {
+    await delay(350);
+    const data = await fetchPage(config.main, config.type, regionId, page, config.sub, districtId, priceFrom, priceTo);
+    const estates = data._embedded?.estates || [];
+    if (estates.length === 0) break;
+    results.push(...estates);
+    if (estates.length < PER_PAGE) {
+      hasMore = false;
+    } else {
+      page++;
+    }
+  }
+
+  return results;
+}
+
+function parseListing(
+  estate: SrealityEstate,
+  config: SearchConfig,
+  regionId: number,
+  districtId: number | null,
+  fallbackLocality: string,
+): ParsedListing {
+  return {
+    id: estate.hash_id.toString(),
+    title: estate.name,
+    url: buildListingUrl(
+      estate.hash_id,
+      config.type,
+      config.main,
+      estate.seo?.locality || "",
+      estate.seo?.category_sub_cb || 0,
+      estate.name
+    ),
+    location: estate.locality || estate.seo?.locality || fallbackLocality,
+    area_m2: extractArea(estate),
+    category: config.label,
+    price: estate.price,
+    lat: estate.gps?.lat ?? null,
+    lon: estate.gps?.lon ?? null,
+    region_id: regionId,
+    district_id: districtId,
+  };
+}
+
 export interface DistrictInfo {
   id: number;
   region_id: number;
   name: string;
 }
 
-/**
- * Scrape listings per district for more complete results and district_id mapping.
- * Falls back to region-level for configs where district doesn't apply.
- */
 export async function scrapeAllListings(
   regionIds?: number[],
   districts?: DistrictInfo[]
@@ -219,7 +306,6 @@ export async function scrapeAllListings(
     ? REGIONS.filter((r) => regionIds.includes(r.id))
     : REGIONS;
 
-  // If districts provided, scrape per-district for finer granularity
   if (districts && districts.length > 0) {
     const filteredDistricts = regionIds
       ? districts.filter(d => regionIds.includes(d.region_id))
@@ -232,137 +318,114 @@ export async function scrapeAllListings(
       console.log(`\n=== District: ${district.name} (id=${district.id}, region=${region?.name}) ===`);
 
       for (const config of SEARCH_CONFIGS) {
-        const subLabel = config.sub ? ` (sub=${config.sub})` : "";
-        let page = 1;
-        let hasMore = true;
+        const subLabel = config.sub ? ` sub=${config.sub}` : "";
+        const estates = await scrapeBucket(config, district.region_id, district.id, 0, PRICE_MAX, 0);
+
         let count = 0;
-
-        while (hasMore && page <= MAX_PAGES) {
-          try {
-            const data = await fetchPage(config.main, config.type, district.region_id, page, config.sub, district.id);
-            const estates = data._embedded?.estates || [];
-
-            if (estates.length === 0) {
-              hasMore = false;
-              break;
-            }
-
-            for (const estate of estates) {
-              if (!estate.price || estate.price <= 1) continue;
-              const eid = estate.hash_id.toString();
-              if (seenIds.has(eid)) continue;
-              seenIds.add(eid);
-
-              allListings.push({
-                id: eid,
-                title: estate.name,
-                url: buildListingUrl(
-                  estate.hash_id,
-                  config.type,
-                  config.main,
-                  estate.seo?.locality || "",
-                  estate.seo?.category_sub_cb || 0,
-                  estate.name
-                ),
-                location: estate.locality || estate.seo?.locality || district.name,
-                area_m2: extractArea(estate),
-                category: config.label,
-                price: estate.price,
-                lat: estate.gps?.lat ?? null,
-                lon: estate.gps?.lon ?? null,
-                region_id: district.region_id,
-                district_id: district.id,
-              });
-              count++;
-            }
-
-            if (estates.length < PER_PAGE) {
-              hasMore = false;
-            } else {
-              page++;
-              await delay(350);
-            }
-          } catch (err) {
-            console.error(`    Error ${config.label}${subLabel} page ${page}:`, err);
-            hasMore = false;
-          }
+        for (const estate of estates) {
+          if (!estate.price || estate.price <= 1) continue;
+          const eid = estate.hash_id.toString();
+          if (seenIds.has(eid)) continue;
+          seenIds.add(eid);
+          allListings.push(parseListing(estate, config, district.region_id, district.id, district.name));
+          count++;
         }
 
         if (count > 0) {
-          console.log(`  ${config.label}${subLabel}: ${count} listings (${page} pages)`);
+          console.log(`  ${config.label}${subLabel}: ${count}`);
         }
       }
 
-      console.log(`  District total so far: ${allListings.length} listings`);
+      console.log(`  → Total so far: ${allListings.length}`);
     }
   } else {
-    // Fallback: region-level scraping (no district_id)
     for (const region of regionsToScrape) {
       console.log(`\n=== Region: ${region.name} (id=${region.id}) ===`);
 
       for (const config of SEARCH_CONFIGS) {
-        const subLabel = config.sub ? ` (sub=${config.sub})` : "";
-        console.log(`  Scraping ${config.label}${subLabel}...`);
-        let page = 1;
-        let hasMore = true;
-        let regionCategoryCount = 0;
+        const subLabel = config.sub ? ` sub=${config.sub}` : "";
+        const estates = await scrapeBucket(config, region.id, undefined, 0, PRICE_MAX, 0);
 
-        while (hasMore && page <= MAX_PAGES) {
-          try {
-            const data = await fetchPage(config.main, config.type, region.id, page, config.sub);
-            const estates = data._embedded?.estates || [];
-
-            if (estates.length === 0) {
-              hasMore = false;
-              break;
-            }
-
-            for (const estate of estates) {
-              if (!estate.price || estate.price <= 1) continue;
-              const eid = estate.hash_id.toString();
-              if (seenIds.has(eid)) continue;
-              seenIds.add(eid);
-
-              allListings.push({
-                id: eid,
-                title: estate.name,
-                url: buildListingUrl(
-                  estate.hash_id,
-                  config.type,
-                  config.main,
-                  estate.seo?.locality || "",
-                  estate.seo?.category_sub_cb || 0,
-                  estate.name
-                ),
-                location: estate.locality || estate.seo?.locality || region.name,
-                area_m2: extractArea(estate),
-                category: config.label,
-                price: estate.price,
-                lat: estate.gps?.lat ?? null,
-                lon: estate.gps?.lon ?? null,
-                region_id: region.id,
-                district_id: null,
-              });
-              regionCategoryCount++;
-            }
-
-            if (estates.length < PER_PAGE) {
-              hasMore = false;
-            } else {
-              page++;
-              await delay(400);
-            }
-          } catch (err) {
-            console.error(`    Error on page ${page}:`, err);
-            hasMore = false;
-          }
+        let count = 0;
+        for (const estate of estates) {
+          if (!estate.price || estate.price <= 1) continue;
+          const eid = estate.hash_id.toString();
+          if (seenIds.has(eid)) continue;
+          seenIds.add(eid);
+          allListings.push(parseListing(estate, config, region.id, null, region.name));
+          count++;
         }
 
-        console.log(`    → ${regionCategoryCount} listings (${page} pages)`);
+        if (count > 0) {
+          console.log(`  ${config.label}${subLabel}: ${count}`);
+        }
       }
     }
   }
 
   console.log(`\nTotal scraped: ${allListings.length} unique listings`);
   return allListings;
+}
+
+/**
+ * Fast scan: sort by newest/last-updated, stop early when we hit a known listing.
+ * Catches new listings and repriced ones (Sreality bumps updated listings to top).
+ * Does NOT handle delistings — that requires a full scan.
+ *
+ * @param knownIds  Set of listing IDs already in DB. Used for early termination.
+ * @param regionIds Optional filter; defaults to all 14 regions.
+ */
+export async function scrapeLatestListings(
+  knownIds: Set<string>,
+  regionIds?: number[],
+): Promise<ParsedListing[]> {
+  const regionsToScan = regionIds
+    ? REGIONS.filter(r => regionIds.includes(r.id))
+    : REGIONS;
+
+  const results: ParsedListing[] = [];
+  const seenIds = new Set<string>();
+  const MAX_FAST_PAGES = 3; // max 180 listings per category+region before we give up
+  const FAST_DELAY = 80;    // ms between requests — lighter than full scan's 350ms
+
+  for (const region of regionsToScan) {
+    for (const config of FAST_SCAN_CONFIGS) {
+      let hitKnown = false;
+
+      for (let page = 1; page <= MAX_FAST_PAGES; page++) {
+        if (page > 1) await delay(FAST_DELAY);
+
+        let data: SrealityResponse;
+        try {
+          data = await fetchPage(config.main, config.type, region.id, page, undefined, undefined, undefined, undefined, 2);
+        } catch {
+          break; // skip this config on error, don't abort whole scan
+        }
+
+        const estates = data._embedded?.estates || [];
+        if (estates.length === 0) break;
+
+        for (const estate of estates) {
+          const id = estate.hash_id.toString();
+
+          if (knownIds.has(id)) {
+            // First listing we already know → everything after is also known (sorted by newest)
+            hitKnown = true;
+            break;
+          }
+
+          if (!estate.price || estate.price <= 1) continue;
+          if (seenIds.has(id)) continue;
+          seenIds.add(id);
+          results.push(parseListing(estate, config, region.id, null, region.name));
+        }
+
+        if (hitKnown || estates.length < PER_PAGE) break;
+      }
+
+      await delay(FAST_DELAY);
+    }
+  }
+
+  return results;
 }

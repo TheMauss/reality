@@ -10,6 +10,7 @@ export async function GET(req: NextRequest) {
   const maxPrice = parseInt(sp.get("max_price") || "0", 10);
   const minArea = parseInt(sp.get("min_area") || "0", 10);
   const maxArea = parseInt(sp.get("max_area") || "0", 10);
+  const layout  = sp.get("layout") || "";
   const page = Math.max(1, parseInt(sp.get("page") || "1", 10));
   const perPage = 30;
   const offset = (page - 1) * perPage;
@@ -42,6 +43,10 @@ export async function GET(req: NextRequest) {
   if (maxArea > 0) {
     where += " AND area_m2 <= ?";
     params.push(maxArea);
+  }
+  if (layout) {
+    where += " AND title LIKE ?";
+    params.push(`%${layout}%`);
   }
 
   const sortMap: Record<string, string> = {

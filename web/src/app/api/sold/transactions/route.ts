@@ -28,7 +28,7 @@ export async function GET(req: NextRequest) {
     )
     .all(wardId);
 
-  // Get asking price for the ward's district from listings
+  // Get asking price for the ward's district from listings, with region fallback
   const wardData = ward as Record<string, unknown> | undefined;
   let districtAskingM2: number | null = null;
   if (wardData?.district_id) {
@@ -39,6 +39,16 @@ export async function GET(req: NextRequest) {
       )
       .get(wardData.district_id) as { asking_m2: number | null } | undefined;
     districtAskingM2 = asking?.asking_m2 ?? null;
+  }
+  // Fallback to region-level if district has no data
+  if (!districtAskingM2 && wardData?.region_id) {
+    const regionAsking = db
+      .prepare(
+        `SELECT ROUND(AVG(CASE WHEN area_m2 > 0 AND category = 'byty-prodej' THEN price * 1.0 / area_m2 END)) as asking_m2
+        FROM listings WHERE region_id = ?`
+      )
+      .get(wardData.region_id) as { asking_m2: number | null } | undefined;
+    districtAskingM2 = regionAsking?.asking_m2 ?? null;
   }
 
   return NextResponse.json({ ward, transactions, district_asking_m2: districtAskingM2 });

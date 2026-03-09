@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { fixSrealityUrl } from "@/lib/sreality-url";
 import SrealityDetail from "@/components/SrealityDetail";
+import BezrealitkuDetail from "@/components/BezrealitkuDetail";
 
 interface Listing {
   id: string;
@@ -32,6 +33,14 @@ interface Change {
   old_value: string | null;
   new_value: string | null;
   detected_at: string;
+}
+
+interface Source {
+  source: string;
+  source_id: string;
+  url: string;
+  first_seen_at: string;
+  removed_at: string | null;
 }
 
 function formatPrice(price: number): string {
@@ -81,6 +90,7 @@ export default async function ListingPage({
   const history: HistoryEntry[] = data.history;
   const drops: Drop[] = data.drops;
   const changes: Change[] = data.changes || [];
+  const sources: Source[] = data.sources || [];
 
   const minPrice = history.length
     ? Math.min(...history.map((h) => h.price))
@@ -137,7 +147,36 @@ export default async function ListingPage({
                 {pricePerM2.toLocaleString("cs-CZ")} Kč/m²
               </div>
             )}
-            {listing.url && (
+            {sources.filter(s => !s.removed_at).length > 0 ? (
+              <div className="flex flex-wrap gap-2">
+                {sources.filter(s => !s.removed_at).map(s => {
+                  const isSreality = s.source === "sreality";
+                  const isBezrealitky = s.source === "bezrealitky";
+                  const label = isSreality
+                    ? "Sreality ↗"
+                    : isBezrealitky
+                    ? "Bezrealitky ↗"
+                    : `${s.source} ↗`;
+                  const href = isSreality
+                    ? fixSrealityUrl(s.url, listing.id, listing.title, listing.location, listing.category)
+                    : s.url;
+                  const colorClass = isBezrealitky
+                    ? "bg-amber-500 hover:bg-amber-400"
+                    : "bg-accent hover:bg-accent-light";
+                  return (
+                    <a
+                      key={s.source}
+                      href={href}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className={`rounded-lg px-4 py-2 text-sm font-medium text-white transition-colors ${colorClass}`}
+                    >
+                      {label}
+                    </a>
+                  );
+                })}
+              </div>
+            ) : listing.url ? (
               <a
                 href={fixSrealityUrl(listing.url, listing.id, listing.title, listing.location, listing.category)}
                 target="_blank"
@@ -146,13 +185,25 @@ export default async function ListingPage({
               >
                 Zobrazit na Sreality ↗
               </a>
-            )}
+            ) : null}
           </div>
         </div>
       </div>
 
-      {/* Sreality photos, params, description */}
-      <SrealityDetail listingId={listing.id} />
+      {/* Photos, params, description */}
+      {listing.id.startsWith("bz_") ? (
+        <BezrealitkuDetail listingId={listing.id} />
+      ) : (
+        <>
+          <SrealityDetail listingId={listing.id} />
+          {sources.find(s => s.source === "bezrealitky") && (
+            <BezrealitkuDetail
+              listingId={listing.id}
+              sourceId={sources.find(s => s.source === "bezrealitky")!.source_id}
+            />
+          )}
+        </>
+      )}
 
       {/* Price chart (simple bar visualization) */}
       {history.length > 1 && (

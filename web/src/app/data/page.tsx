@@ -18,6 +18,8 @@ interface Region {
   avg_price_m2: number;
   transactions: number;
   price_change: number | null;
+  yoy_pct: number | null;
+  prev_year_price: number | null;
   asking_m2: number | null;
   listing_count: number;
   spread: number | null;
@@ -105,6 +107,14 @@ export default async function DataPage() {
     }
   } catch { /* */ }
 
+  // Country-level YOY from history array
+  interface HistPoint { year: number; month: number; avgPriceM2: number; yoyPct: number | null }
+  const sortedHistory = [...history].sort((a: HistPoint, b: HistPoint) =>
+    (b.year * 100 + b.month) - (a.year * 100 + a.month)
+  );
+  const latestPoint: HistPoint | null = sortedHistory[0] ?? null;
+  const countryYoy = latestPoint?.yoyPct ?? null;
+
   // Global averages — use weighted average by transactions for sold price
   const totalSoldTransactions = regions.reduce((s, r) => s + (r.transactions || 0), 0);
   const weightedSoldPrice = totalSoldTransactions > 0
@@ -144,7 +154,7 @@ export default async function DataPage() {
       </div>
 
       {/* Top-level metrics */}
-      <div className="grid grid-cols-2 gap-4 lg:grid-cols-5">
+      <div className="grid grid-cols-2 gap-4 lg:grid-cols-6">
         <div className="rounded-xl border border-border bg-card p-5">
           <div className="text-2xl font-bold text-green">
             {formatNum(avgSoldPrice)}
@@ -164,8 +174,21 @@ export default async function DataPage() {
           <div className="mt-1 text-sm text-muted">Spread (ČR)</div>
         </div>
         <div className="rounded-xl border border-border bg-card p-5">
+          {countryYoy !== null ? (
+            <div className={`text-2xl font-bold ${countryYoy >= 0 ? "text-green" : "text-red"}`}>
+              {countryYoy >= 0 ? "+" : ""}{countryYoy.toFixed(1)}%
+            </div>
+          ) : (
+            <div className="text-2xl font-bold text-muted">—</div>
+          )}
+          <div className="mt-1 text-sm text-muted">
+            YoY změna cen (ČR)
+            {latestPoint && <span className="block text-xs opacity-60">{String(latestPoint.month).padStart(2,"0")}/{latestPoint.year} vs –1 rok</span>}
+          </div>
+        </div>
+        <div className="rounded-xl border border-border bg-card p-5">
           <div className="text-2xl font-bold">{formatNum(totalSoldTransactions)}</div>
-          <div className="mt-1 text-sm text-muted">Transakcí</div>
+          <div className="mt-1 text-sm text-muted">Transakcí (celkem)</div>
         </div>
         <div className="rounded-xl border border-border bg-card p-5">
           <div className="text-2xl font-bold">{formatNum(statsData.totalListings)}</div>
@@ -182,6 +205,61 @@ export default async function DataPage() {
           <SoldPriceChart monthlyPrices={history} askingPriceM2={avgAskingPrice} />
         </div>
       )}
+
+      {/* YOY by region */}
+      {regions.filter(r => r.yoy_pct !== null).length > 0 && (() => {
+        const yoyRegions = regions
+          .filter(r => r.yoy_pct !== null)
+          .sort((a, b) => (b.yoy_pct ?? 0) - (a.yoy_pct ?? 0));
+        const maxAbs = Math.max(...yoyRegions.map(r => Math.abs(r.yoy_pct ?? 0)));
+        return (
+          <div className="rounded-xl border border-border bg-card p-6">
+            <div className="flex items-start justify-between gap-4 mb-1">
+              <h2 className="text-lg font-semibold">Meziroční změna cen (YoY) – podle krajů</h2>
+              {latestPoint && (
+                <span className="shrink-0 text-xs text-muted bg-background rounded-full px-3 py-1 border border-border">
+                  {String(latestPoint.month).padStart(2,"0")}/{latestPoint.year} vs {String(latestPoint.month).padStart(2,"0")}/{latestPoint.year - 1}
+                </span>
+              )}
+            </div>
+            <p className="mb-5 text-sm text-muted">
+              Porovnání průměrné prodejní ceny/m² byty ve stejném měsíci loňského a letošního roku.
+            </p>
+            <div className="space-y-2.5">
+              {yoyRegions.map(r => {
+                const pct = r.yoy_pct!;
+                const barWidth = (Math.abs(pct) / (maxAbs || 1)) * 100;
+                const positive = pct >= 0;
+                return (
+                  <div key={r.id} className="flex items-center gap-3">
+                    <div className="w-44 shrink-0 text-sm">
+                      <Link href={`/prodeje/kraj/${r.id}`} className="font-medium text-accent-light hover:underline">
+                        {r.name}
+                      </Link>
+                    </div>
+                    <div className="flex-1 flex items-center gap-2">
+                      <div className="relative h-5 flex-1 overflow-hidden rounded bg-background">
+                        <div
+                          className={`absolute inset-y-0 left-0 rounded transition-all ${positive ? "bg-green/50" : "bg-red/50"}`}
+                          style={{ width: `${barWidth}%` }}
+                        />
+                      </div>
+                      <div className={`w-16 shrink-0 text-right text-sm font-bold ${positive ? "text-green" : "text-red"}`}>
+                        {positive ? "+" : ""}{pct.toFixed(1)}%
+                      </div>
+                      {r.prev_year_price && (
+                        <div className="w-28 shrink-0 text-right text-xs text-muted hidden lg:block">
+                          {formatNum(r.prev_year_price)} → {formatNum(r.avg_price_m2)} Kč/m²
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Spread by region */}
       {regions.filter(r => r.spread !== null).length > 0 && (
@@ -317,50 +395,53 @@ export default async function DataPage() {
         </div>
       )}
 
-      {/* Price change by region */}
-      {regions.filter(r => r.price_change !== null).length > 0 && (
+      {/* Price table by region — sold price + YOY + spread + transactions */}
+      {regions.length > 0 && (
         <div className="rounded-xl border border-border bg-card p-6">
-          <h2 className="mb-4 text-lg font-semibold">
-            Cenové trendy – změna prodejních cen
-          </h2>
+          <h2 className="mb-1 text-lg font-semibold">Přehled prodejních cen – kraje</h2>
+          <p className="mb-4 text-sm text-muted">Seřazeno dle YoY změny. Kliknutím na kraj zobrazíte detail.</p>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-border text-left text-muted">
                   <th className="pb-2 font-medium">Kraj</th>
                   <th className="pb-2 text-right font-medium">Prodejní Kč/m²</th>
-                  <th className="pb-2 text-right font-medium">Změna</th>
+                  <th className="pb-2 text-right font-medium">YoY</th>
+                  <th className="pb-2 text-right font-medium">Nabídka Kč/m²</th>
+                  <th className="pb-2 text-right font-medium">Spread</th>
                   <th className="pb-2 text-right font-medium">Transakcí</th>
                 </tr>
               </thead>
               <tbody>
                 {regions
-                  .filter(r => r.price_change !== null)
-                  .sort((a, b) => (b.price_change ?? 0) - (a.price_change ?? 0))
+                  .slice()
+                  .sort((a, b) => (b.yoy_pct ?? -999) - (a.yoy_pct ?? -999))
                   .map((r) => (
-                    <tr key={r.id} className="border-b border-border/50">
+                    <tr key={r.id} className="border-b border-border/50 hover:bg-background/40 transition-colors">
                       <td className="py-2.5">
-                        <Link
-                          href={`/prodeje/kraj/${r.id}`}
-                          className="font-medium text-accent-light hover:underline"
-                        >
+                        <Link href={`/prodeje/kraj/${r.id}`} className="font-medium text-accent-light hover:underline">
                           {r.name}
                         </Link>
                       </td>
-                      <td className="py-2.5 text-right text-green">
+                      <td className="py-2.5 text-right font-medium text-foreground">
                         {formatNum(r.avg_price_m2)}
                       </td>
                       <td className="py-2.5 text-right">
-                        <span
-                          className={`font-bold ${r.price_change! >= 0 ? "text-green" : "text-red"}`}
-                        >
-                          {r.price_change! >= 0 ? "+" : ""}
-                          {r.price_change!.toFixed(1)}%
-                        </span>
+                        {r.yoy_pct !== null ? (
+                          <span className={`font-bold ${r.yoy_pct >= 0 ? "text-green" : "text-red"}`}>
+                            {r.yoy_pct >= 0 ? "+" : ""}{r.yoy_pct.toFixed(1)}%
+                          </span>
+                        ) : <span className="text-muted">—</span>}
                       </td>
-                      <td className="py-2.5 text-right text-muted">
-                        {formatNum(r.transactions)}
+                      <td className="py-2.5 text-right text-muted">{formatNum(r.asking_m2)}</td>
+                      <td className="py-2.5 text-right">
+                        {r.spread !== null ? (
+                          <span className={`font-medium ${r.spread > 20 ? "text-red" : r.spread > 0 ? "text-amber-400" : "text-green"}`}>
+                            {r.spread > 0 ? "+" : ""}{r.spread.toFixed(1)}%
+                          </span>
+                        ) : <span className="text-muted">—</span>}
                       </td>
+                      <td className="py-2.5 text-right text-muted">{formatNum(r.transactions)}</td>
                     </tr>
                   ))}
               </tbody>

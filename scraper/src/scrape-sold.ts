@@ -7,7 +7,8 @@ const DB_PATH =
 
 const SREALITY_BASE = "https://www.sreality.cz/api/v1/price_map";
 const DATE_FROM = "2018-01";
-const DATE_TO = "2026-03";
+const _now = new Date();
+const DATE_TO = `${_now.getFullYear()}-${String(_now.getMonth() + 1).padStart(2, "0")}`;
 
 // Yearly ranges for transaction fetching (bypasses estate_list cap ~1800)
 const YEAR_RANGES = [
@@ -204,6 +205,8 @@ function initSchema(db: Database.Database) {
 
   // Migration: add category to transactions
   try { db.exec("ALTER TABLE sold_transactions ADD COLUMN category TEXT NOT NULL DEFAULT 'byty'"); } catch { /* exists */ }
+  // Migration: add area_m2
+  try { db.exec("ALTER TABLE sold_transactions ADD COLUMN area_m2 REAL"); } catch { /* exists */ }
 }
 
 /**
@@ -258,10 +261,37 @@ async function fetchMunicipalitySubWards(
   })) as { result: { aggregated_list?: SrealityAggItem[]; estate_list?: SrealityEstate[] | null; num_transactions: number } };
 
   const subWards = (data.result?.aggregated_list || []).filter(
-    a => a.avg_price_per_sqm !== null && a.num_transactions > 0
+    a => a.num_transactions > 0
   );
 
   return subWards;
+}
+
+/** Parse area midpoint from transaction title.
+ *  "Byt 2+1, 56–60 m²" → 58,  "Rodinný dům, 150 m²" → 150 */
+function parseArea(title: string): number | null {
+  const range = title.match(/(\d+)[–\-](\d+)\s*m[²2]/);
+  if (range) return (parseInt(range[1]) + parseInt(range[2])) / 2;
+  const exact = title.match(/(\d+)\s*m[²2]/);
+  if (exact) return parseInt(exact[1]);
+  return null;
+}
+
+/** Backfill area_m2 for existing rows that have NULL */
+function backfillAreaM2(db: Database.Database) {
+  const rows = db.prepare("SELECT id, title FROM sold_transactions WHERE area_m2 IS NULL").all() as { id: number; title: string }[];
+  if (rows.length === 0) return;
+  console.log(`  Backfilling area_m2 for ${rows.length} transactions...`);
+  const update = db.prepare("UPDATE sold_transactions SET area_m2 = ? WHERE id = ?");
+  const run = db.transaction(() => {
+    let updated = 0;
+    for (const row of rows) {
+      const area = parseArea(row.title);
+      if (area !== null) { update.run(area, row.id); updated++; }
+    }
+    console.log(`  area_m2 backfilled: ${updated}/${rows.length}`);
+  });
+  run();
 }
 
 export async function runSoldScrape() {
@@ -269,6 +299,8 @@ export async function runSoldScrape() {
   const db = new Database(DB_PATH);
   db.pragma("journal_mode = WAL");
   initSchema(db);
+
+  backfillAreaM2(db);
 
   const now = new Date().toISOString();
   console.log("=== Sold Prices Scraper (celá ČR) ===");
@@ -488,7 +520,7 @@ export async function runSoldScrape() {
           return {
             district,
             wards: wardListData.result.aggregated_list.filter(
-              (a) => a.avg_price_per_sqm !== null
+              (a) => a.num_transactions > 0
             ),
           };
         })
@@ -521,8 +553,8 @@ export async function runSoldScrape() {
             };
 
             // Large municipalities likely have sub-wards (entity_type is "municipality")
-            // Municipalities with 500+ transactions likely have sub-divisions
-            if (w.locality.entity_type === "municipality" && w.num_transactions >= 500) {
+            // Municipalities with 100+ transactions likely have sub-divisions worth drilling into
+            if (w.locality.entity_type === "municipality" && w.num_transactions >= 100) {
               wardInfo.hasSubWards = true;
               municipalitiesWithSubWards.push(wardInfo);
             }
@@ -563,7 +595,8 @@ export async function runSoldScrape() {
             const muni = batch[j];
 
             if (subWards.length === 0) {
-              // No sub-wards — this municipality is a leaf, transactions fetched directly
+              // No sub-wards — leaf municipality, allow step 6 to fetch its transactions
+              muni.hasSubWards = false;
               continue;
             }
 
@@ -607,8 +640,8 @@ export async function runSoldScrape() {
     );
 
     const upsertTransaction = db.prepare(`
-      INSERT OR REPLACE INTO sold_transactions (id, ward_id, title, validation_date, lat, lon, address, municipality, ward_name, ward_avg_price_m2, scraped_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT OR REPLACE INTO sold_transactions (id, ward_id, title, validation_date, lat, lon, address, municipality, ward_name, ward_avg_price_m2, category, area_m2, scraped_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
     let totalTransactions = 0;
@@ -627,7 +660,7 @@ export async function runSoldScrape() {
 
           const estates = data.result?.estate_list || [];
           const subWards = (data.result?.aggregated_list || []).filter(
-            (a) => a.avg_price_per_sqm !== null
+            (a) => a.num_transactions > 0
           );
           return { district, estates, subWards };
         })
@@ -672,6 +705,8 @@ export async function runSoldScrape() {
               e.locality.municipality,
               e.locality.ward,
               district.avgPriceM2 || 0,
+              category.label,
+              parseArea(e.title),
               now
             );
             totalTransactions++;
@@ -727,6 +762,8 @@ export async function runSoldScrape() {
               e.locality.municipality,
               e.locality.ward,
               ward.avgPriceM2,
+              category.label,
+              parseArea(e.title),
               now
             );
             totalTransactions++;

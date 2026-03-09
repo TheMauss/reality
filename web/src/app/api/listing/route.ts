@@ -41,5 +41,12 @@ export async function GET(req: NextRequest) {
     // table doesn't exist yet
   }
 
-  return NextResponse.json({ listing, history, drops, changes });
+  let sources: unknown[] = [];
+  try {
+    sources = db.prepare(
+      "SELECT source, source_id, url, first_seen_at, last_seen_at, removed_at FROM listing_sources WHERE listing_id = ? ORDER BY first_seen_at ASC"
+    ).all(id);
+  } catch { /* table may not exist */ }
+
+  return NextResponse.json({ listing, history, drops, changes, sources });
 }
