@@ -243,20 +243,27 @@ export default function NavBar() {
             Propady
           </a>
 
-          {savedCount > 0 && (
-            <a
-              href="/ulozene"
-              className="relative flex items-center gap-1.5 rounded-lg border border-border bg-card px-3 py-1.5 text-xs font-medium text-foreground transition-all hover:border-accent/30 hover:bg-card-hover"
-            >
-              <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" strokeWidth="1.5" className="text-red/80">
-                <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
-              </svg>
-              Uložené
+          <a
+            href="/ulozene"
+            className={`relative flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium transition-all ${
+              savedCount > 0
+                ? "border-red/20 bg-red/5 text-foreground hover:border-red/30 hover:bg-red/10"
+                : "border-border bg-card text-muted hover:border-accent/30 hover:bg-card-hover hover:text-foreground"
+            }`}
+          >
+            <svg width="11" height="11" viewBox="0 0 24 24"
+              fill={savedCount > 0 ? "currentColor" : "none"}
+              stroke="currentColor" strokeWidth={savedCount > 0 ? "1.5" : "2"}
+              className={savedCount > 0 ? "text-red/80" : "text-muted"}>
+              <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
+            </svg>
+            Uložené
+            {savedCount > 0 && (
               <span className="flex h-4 min-w-4 items-center justify-center rounded-full bg-red/80 px-1 text-[9px] font-bold text-white">
                 {savedCount}
               </span>
-            </a>
-          )}
+            )}
+          </a>
 
           <a
             href="/mapa"

@@ -91,7 +91,9 @@ export default function ListingsFilters() {
   const maxPrice  = searchParams.get("max_price") || "";
   const minArea   = searchParams.get("min_area") || "";
   const maxArea   = searchParams.get("max_area") || "";
-  const layout    = searchParams.get("layout") || "";
+  const layoutRaw = searchParams.get("layout") || "";
+  const layout    = layoutRaw;
+  const selectedLayouts = layoutRaw ? layoutRaw.split(",").filter(Boolean) : [];
 
   const [priceMin, setPriceMin] = useState(minPrice);
   const [priceMax, setPriceMax] = useState(maxPrice);
@@ -113,7 +115,7 @@ export default function ListingsFilters() {
 
   const priceActive = !!(minPrice || maxPrice);
   const areaActive  = !!(minArea || maxArea);
-  const layoutActive = !!layout;
+  const layoutActive = selectedLayouts.length > 0;
 
   const hasAny = priceActive || areaActive || layoutActive;
 
@@ -140,7 +142,7 @@ export default function ListingsFilters() {
     ? [minArea && `${minArea} m²`, maxArea && `${maxArea} m²`].filter(Boolean).join(" – ")
     : "Plocha";
 
-  const layoutLabel = layoutActive ? layout : "Dispozice";
+  const layoutLabel = selectedLayouts.length > 0 ? selectedLayouts.join(", ") : "Dispozice";
 
   return (
     <div className="space-y-2">
@@ -287,19 +289,27 @@ export default function ListingsFilters() {
           <div className="p-3">
             <div className="text-xs font-semibold text-muted uppercase tracking-wider mb-2 px-1">Dispozice</div>
             <div className="grid grid-cols-3 gap-1.5">
-              {LAYOUTS.map((l) => (
-                <button
-                  key={l}
-                  onClick={() => update({ layout: layout === l ? "" : l })}
-                  className={`rounded-lg border px-2 py-1.5 text-sm font-medium transition-colors ${
-                    layout === l
-                      ? "border-accent/50 bg-accent/15 text-accent-light"
-                      : "border-border bg-background text-muted hover:border-accent/30 hover:text-foreground"
-                  }`}
-                >
-                  {l}
-                </button>
-              ))}
+              {LAYOUTS.map((l) => {
+                const active = selectedLayouts.includes(l);
+                return (
+                  <button
+                    key={l}
+                    onClick={() => {
+                      const next = active
+                        ? selectedLayouts.filter(x => x !== l)
+                        : [...selectedLayouts, l];
+                      update({ layout: next.join(",") });
+                    }}
+                    className={`rounded-lg border px-2 py-1.5 text-sm font-medium transition-colors ${
+                      active
+                        ? "border-accent/50 bg-accent/15 text-accent-light"
+                        : "border-border bg-background text-muted hover:border-accent/30 hover:text-foreground"
+                    }`}
+                  >
+                    {l}
+                  </button>
+                );
+              })}
             </div>
           </div>
         </FilterDropdown>
@@ -337,14 +347,17 @@ export default function ListingsFilters() {
               </button>
             </span>
           )}
-          {layoutActive && (
-            <span className="inline-flex items-center gap-1.5 rounded-full border border-accent/30 bg-accent/8 px-2.5 py-1 text-xs font-medium text-accent-light">
-              Dispozice: {layout}
-              <button onClick={() => update({ layout: "" })} className="hover:text-white transition-colors">
+          {selectedLayouts.map(l => (
+            <span key={l} className="inline-flex items-center gap-1.5 rounded-full border border-accent/30 bg-accent/8 px-2.5 py-1 text-xs font-medium text-accent-light">
+              {l}
+              <button
+                onClick={() => update({ layout: selectedLayouts.filter(x => x !== l).join(",") })}
+                className="hover:text-white transition-colors"
+              >
                 <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
               </button>
             </span>
-          )}
+          ))}
         </div>
       )}
     </div>

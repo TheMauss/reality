@@ -1,6 +1,7 @@
 import { Suspense } from "react";
 import InzerceClient from "@/components/InzerceClient";
 import SearchHero from "@/components/SearchHero";
+import NewestCard from "@/components/NewestCard";
 
 interface Listing {
   id: string;
@@ -25,12 +26,45 @@ async function getListingsData(searchParams: Record<string, string>) {
   return res.json();
 }
 
-async function getNewest(category: string): Promise<Listing[]> {
+async function getNewest(category: string, limit = 6): Promise<Listing[]> {
   const params = new URLSearchParams({ sort: "newest", page: "1" });
   if (category) params.set("category", category);
   const res = await fetch(`${BASE}/api/listings?${params}`, { cache: "no-store" });
   const data = await res.json();
-  return (data.listings || []).slice(0, 6);
+  return (data.listings || []).slice(0, limit);
+}
+
+interface NewestSection {
+  label: string;
+  category: string;
+  listings: Listing[];
+}
+
+async function getNewestSections(category: string): Promise<NewestSection[]> {
+  const CATEGORIES: { cat: string; label: string }[] = [
+    { cat: "byty-prodej",    label: "Nejnovější byty k prodeji" },
+    { cat: "byty-najem",     label: "Nejnovější pronájmy bytů" },
+    { cat: "domy-prodej",    label: "Nejnovější domy k prodeji" },
+    { cat: "domy-najem",     label: "Nejnovější pronájmy domů" },
+  ];
+
+  if (category) {
+    // Single category mode — one section, 6 items
+    const label = CATEGORIES.find(c => c.cat === category)?.label ?? "Právě přidáno";
+    const listings = await getNewest(category, 6);
+    const thumbs = await Promise.all(listings.map((l: Listing) => fetchThumb(l.id)));
+    return [{ label, category, listings: listings.map((l: Listing, i: number) => ({ ...l, thumb: thumbs[i] })) }];
+  }
+
+  // No filter — show all 4 categories, 3 items each
+  const sections = await Promise.all(
+    CATEGORIES.map(async ({ cat, label }) => {
+      const listings = await getNewest(cat, 3);
+      const thumbs = await Promise.all(listings.map((l: Listing) => fetchThumb(l.id)));
+      return { label, category: cat, listings: listings.map((l: Listing, i: number) => ({ ...l, thumb: thumbs[i] })) };
+    })
+  );
+  return sections.filter(s => s.listings.length > 0);
 }
 
 async function fetchThumb(id: string): Promise<string | null> {
@@ -55,93 +89,6 @@ async function fetchThumb(id: string): Promise<string | null> {
   }
 }
 
-function formatPrice(price: number): string {
-  if (price >= 1_000_000) return `${(price / 1_000_000).toFixed(1)} M Kč`;
-  return `${Math.round(price).toLocaleString("cs-CZ")} Kč`;
-}
-
-function daysAgo(dateStr: string): string {
-  const elapsed = Math.floor((Date.now() - new Date(dateStr).getTime()) / 60000);
-  if (elapsed < 60) return `Před ${elapsed} min`;
-  if (elapsed < 1440) return `Před ${Math.floor(elapsed / 60)}h`;
-  const days = Math.floor(elapsed / 1440);
-  if (days === 1) return "Včera";
-  return `Před ${days} dny`;
-}
-
-function NewestCard({ listing }: { listing: Listing }) {
-  const timeLabel = daysAgo(listing.first_seen_at);
-
-  return (
-    <a
-      href={`/listing/${listing.id}`}
-      className="group flex flex-col overflow-hidden rounded-xl border border-border bg-card transition-all hover:border-accent/30 hover:shadow-xl hover:shadow-black/30 hover:-translate-y-0.5"
-    >
-      {/* Image */}
-      <div className="relative h-52 shrink-0 overflow-hidden bg-card-hover">
-        {listing.thumb ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={listing.thumb}
-            alt={listing.title}
-            className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
-          />
-        ) : (
-          <div
-            className="flex h-full w-full items-center justify-center"
-            style={{ background: "linear-gradient(135deg,#13151f,#1a1d2e)" }}
-          >
-            <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="0.8" className="text-border">
-              <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
-              <polyline points="9 22 9 12 15 12 15 22"/>
-            </svg>
-          </div>
-        )}
-        {/* Badges */}
-        <div className="absolute top-2.5 left-2.5">
-          <span className="rounded-md bg-green/90 px-2 py-0.5 text-[10px] font-bold text-black tracking-wide">
-            NOVÉ
-          </span>
-        </div>
-        <div className="absolute top-2.5 right-2.5">
-          <span className="rounded-md bg-black/60 px-2 py-0.5 text-[10px] text-white/80 backdrop-blur-sm">
-            {timeLabel}
-          </span>
-        </div>
-        {/* Area badge bottom right */}
-        {listing.area_m2 && (
-          <div className="absolute bottom-2.5 right-2.5">
-            <span className="rounded-md bg-black/60 px-2 py-0.5 text-[10px] text-white/70 backdrop-blur-sm">
-              {listing.area_m2} m²
-            </span>
-          </div>
-        )}
-      </div>
-
-      {/* Content */}
-      <div className="flex flex-1 flex-col p-4">
-        <p className="line-clamp-2 text-sm font-semibold leading-snug text-foreground group-hover:text-accent-light transition-colors mb-2">
-          {listing.title}
-        </p>
-        {listing.location && (
-          <p className="mb-3 flex items-center gap-1.5 truncate text-xs text-muted">
-            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="shrink-0">
-              <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/>
-              <circle cx="12" cy="10" r="3"/>
-            </svg>
-            {listing.location}
-          </p>
-        )}
-        <div className="mt-auto flex items-end justify-between gap-2">
-          <span className="text-base font-bold">{formatPrice(listing.price)}</span>
-          {listing.price_m2 && (
-            <span className="text-xs text-muted">{Math.round(listing.price_m2).toLocaleString("cs-CZ")} Kč/m²</span>
-          )}
-        </div>
-      </div>
-    </a>
-  );
-}
 
 // ── Static data ──────────────────────────────────────────
 
@@ -227,16 +174,6 @@ function getMarketStats(category: string, total: number) {
   }
 }
 
-function getNewestLabel(category: string) {
-  switch (category) {
-    case "byty-prodej":  return "Nejnovější byty k prodeji";
-    case "byty-najem":   return "Nejnovější pronájmy bytů";
-    case "domy-prodej":  return "Nejnovější domy k prodeji";
-    case "domy-najem":   return "Nejnovější pronájmy domů";
-    case "pozemky-prodej": return "Nejnovější pozemky";
-    default:             return "Právě přidáno";
-  }
-}
 
 function getPopularSearches(category: string) {
   switch (category) {
@@ -367,28 +304,47 @@ export default async function InzercePage({
     sp.min_area || sp.max_area || sp.layout || sp.page
   );
 
-  const [data, newestRaw] = await Promise.all([
+  const [data, newestSections] = await Promise.all([
     getListingsData(sp),
-    getNewest(sp.category || ""),
+    hasFilter ? Promise.resolve([]) : getNewestSections(sp.category || ""),
   ]);
-
-  const thumbs = await Promise.all(newestRaw.map((l: Listing) => fetchThumb(l.id)));
-  const newest: Listing[] = newestRaw.map((l: Listing, i: number) => ({ ...l, thumb: thumbs[i] }));
 
   const currentPage = parseInt(sp.page || "1", 10);
   const cat = sp.category || "";
   const marketStats = getMarketStats(cat, data.total || 0);
   const popularSearches = getPopularSearches(cat);
   const guides = getGuides(cat);
-  const newestLabel = getNewestLabel(cat);
 
+  // ── Compact results mode (after search / filter) ────────────────────────
+  if (hasFilter) {
+    return (
+      <Suspense
+        fallback={
+          <div className="h-96 flex items-center justify-center text-muted text-sm">
+            Načítání…
+          </div>
+        }
+      >
+        <InzerceClient
+          listings={data.listings || []}
+          total={data.total || 0}
+          pages={data.pages || 1}
+          currentPage={currentPage}
+          sp={sp}
+          compactMode
+        />
+      </Suspense>
+    );
+  }
+
+  // ── Landing page mode (no filters) ─────────────────────────────────────
   return (
     <div className="space-y-10">
 
       {/* ── Search hero ──────────────────────────────────────── */}
       <SearchHero activeCategory={sp.category} activeLocation={sp.location} />
 
-      {/* ── Landing page sections (no filter) ───────────────── */}
+      {/* ── Landing page sections ───────────────── */}
       {!hasFilter && (
         <>
           {/* ── B) Market stats bar ── */}
@@ -408,30 +364,30 @@ export default async function InzercePage({
             </div>
           </section>
 
-          {/* ── C) Newest listings ── */}
-          {newest.length > 0 && (
-            <section>
+          {/* ── C) Newest listings — one section per category ── */}
+          {(newestSections as NewestSection[]).map((section) => (
+            <section key={section.category}>
               <div className="mb-4 flex items-center justify-between gap-4">
                 <div className="flex items-center gap-2.5">
-                  <h2 className="text-lg font-bold">{newestLabel}</h2>
+                  <h2 className="text-lg font-bold">{section.label}</h2>
                   <span className="rounded-full bg-green/10 px-2.5 py-0.5 text-xs font-bold text-green outline outline-1 outline-green/20">
                     Právě přidáno
                   </span>
                 </div>
                 <a
-                  href={`/inzerce?sort=newest${cat ? `&category=${cat}` : ""}`}
+                  href={`/inzerce?sort=newest&category=${section.category}`}
                   className="text-sm text-accent-light hover:text-accent transition-colors"
                 >
                   Zobrazit vše →
                 </a>
               </div>
-              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3">
-                {newest.map((l) => (
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                {section.listings.map((l) => (
                   <NewestCard key={l.id} listing={l} />
                 ))}
               </div>
             </section>
-          )}
+          ))}
 
           {/* ── D) Explore by city / district ── */}
           <section className="space-y-6">

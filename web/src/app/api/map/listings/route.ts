@@ -26,13 +26,17 @@ export async function GET(req: NextRequest) {
   let where = "WHERE lat IS NOT NULL AND lon IS NOT NULL AND removed_at IS NULL";
   const params: (string | number)[] = [];
 
-  if (category) { where += " AND category = ?"; params.push(category); }
+  const categories = category ? category.split(",").map(s => s.trim()).filter(Boolean) : [];
+  if (categories.length === 1) { where += " AND category = ?"; params.push(categories[0]); }
+  else if (categories.length > 1) { where += ` AND category IN (${categories.map(() => "?").join(",")})`; params.push(...categories); }
   if (location) { where += " AND location LIKE ?"; params.push(`%${location}%`); }
   if (minPrice) { where += " AND price >= ?"; params.push(minPrice); }
   if (maxPrice) { where += " AND price <= ?"; params.push(maxPrice); }
   if (minArea)  { where += " AND area_m2 >= ?"; params.push(minArea); }
   if (maxArea)  { where += " AND area_m2 <= ?"; params.push(maxArea); }
-  if (layout)   { where += " AND title LIKE ?"; params.push(`%${layout}%`); }
+  const layouts = layout ? layout.split(",").map(s => s.trim()).filter(Boolean) : [];
+  if (layouts.length === 1) { where += " AND title LIKE ?"; params.push(`%${layouts[0]}%`); }
+  else if (layouts.length > 1) { where += ` AND (${layouts.map(() => "title LIKE ?").join(" OR ")})`; params.push(...layouts.map(l => `%${l}%`)); }
 
   const listings = db
     .prepare(

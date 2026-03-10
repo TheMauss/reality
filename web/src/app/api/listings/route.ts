@@ -20,10 +20,16 @@ export async function GET(req: NextRequest) {
   let where = "WHERE 1=1";
   const params: (string | number)[] = [];
 
-  if (category) {
+  // Support comma-separated categories (e.g. "byty-prodej,domy-prodej")
+  const categories = category ? category.split(",").map(s => s.trim()).filter(Boolean) : [];
+  if (categories.length === 1) {
     where += " AND category = ?";
-    params.push(category);
+    params.push(categories[0]);
+  } else if (categories.length > 1) {
+    where += ` AND category IN (${categories.map(() => "?").join(",")})`;
+    params.push(...categories);
   }
+
   if (location) {
     where += " AND location LIKE ?";
     params.push(`%${location}%`);
@@ -44,9 +50,14 @@ export async function GET(req: NextRequest) {
     where += " AND area_m2 <= ?";
     params.push(maxArea);
   }
-  if (layout) {
+  // Support comma-separated layouts (e.g. "1+kk,2+kk")
+  const layouts = layout ? layout.split(",").map(s => s.trim()).filter(Boolean) : [];
+  if (layouts.length === 1) {
     where += " AND title LIKE ?";
-    params.push(`%${layout}%`);
+    params.push(`%${layouts[0]}%`);
+  } else if (layouts.length > 1) {
+    where += ` AND (${layouts.map(() => "title LIKE ?").join(" OR ")})`;
+    params.push(...layouts.map(l => `%${l}%`));
   }
 
   const sortMap: Record<string, string> = {

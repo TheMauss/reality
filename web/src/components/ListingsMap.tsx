@@ -17,9 +17,10 @@ export interface ListingPin {
   lon: number;
 }
 
-function formatPrice(p: number) {
-  if (p >= 1_000_000) return `${(p / 1_000_000).toFixed(1)} M Kč`;
-  return `${Math.round(p).toLocaleString("cs-CZ")} Kč`;
+function formatPriceShort(p: number): string {
+  if (p >= 1_000_000) return `${(p / 1_000_000).toFixed(1)} M`;
+  if (p >= 1_000) return `${Math.round(p / 1_000)} k`;
+  return String(Math.round(p));
 }
 
 function getCategoryColor(cat: string): string {
@@ -30,12 +31,6 @@ function getCategoryColor(cat: string): string {
     case "domy-najem": return "#eab308";
     default: return "#6b7280";
   }
-}
-
-function formatPriceShort(p: number): string {
-  if (p >= 1_000_000) return `${(p / 1_000_000).toFixed(1)} M`;
-  if (p >= 1_000) return `${Math.round(p / 1_000)} k`;
-  return String(Math.round(p));
 }
 
 function createPricePin(price: number, color: string, selected = false): L.DivIcon {
@@ -68,6 +63,8 @@ interface Props {
   onPinClick?: (listing: ListingPin) => void;
 }
 
+const SEZNAM_API_KEY = process.env.NEXT_PUBLIC_SEZNAM_MAPS_API_KEY || "";
+
 export default function ListingsMap({ category, location, minPrice, maxPrice, minArea, maxArea, layout, selectedId, onPinClick }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<L.Map | null>(null);
@@ -84,10 +81,17 @@ export default function ListingsMap({ category, location, minPrice, maxPrice, mi
       zoom: 7,
       zoomControl: true,
     });
-    L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png", {
-      attribution: '&copy; OSM &copy; CARTO',
-      maxZoom: 19,
-    }).addTo(map);
+
+    // Seznam Mapy.cz tiles (basic map set)
+    L.tileLayer(
+      `https://api.mapy.cz/v1/maptiles/basic/256/{z}/{x}/{y}?apikey=${SEZNAM_API_KEY}`,
+      {
+        attribution:
+          '<a href="https://mapy.cz" target="_blank" rel="noopener">&copy; Seznam.cz, a.s.</a> &copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a>',
+        maxZoom: 19,
+      }
+    ).addTo(map);
+
     mapRef.current = map;
     layerRef.current = L.layerGroup().addTo(map);
     return () => { map.remove(); mapRef.current = null; };
@@ -158,6 +162,20 @@ export default function ListingsMap({ category, location, minPrice, maxPrice, mi
   return (
     <div className="relative h-full w-full rounded-xl overflow-hidden border border-border">
       <div ref={containerRef} className="h-full w-full" />
+
+      {/* Mapy.cz logo attribution */}
+      <a
+        href="https://mapy.cz"
+        target="_blank"
+        rel="noopener noreferrer"
+        className="absolute bottom-12 right-2 z-[400]"
+      >
+        <img
+          src="https://api.mapy.cz/img/api/logo.svg"
+          alt="Mapy.cz"
+          style={{ height: 24 }}
+        />
+      </a>
 
       {loading && (
         <div className="absolute inset-0 flex items-center justify-center bg-card/70 backdrop-blur-sm">

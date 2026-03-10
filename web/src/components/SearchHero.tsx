@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState, useEffect, useCallback } from "react";
+import React, { useRef, useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 
 // Curated list — popular places with human/colloquial names.
@@ -152,13 +152,18 @@ function TabIconPlot() {
   return <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>;
 }
 
-const CATEGORY_TABS = [
-  { label: "Prodej bytů",    value: "byty-prodej",    Icon: TabIconHome },
-  { label: "Prodej domů",    value: "domy-prodej",    Icon: TabIconHouseTree },
-  { label: "Pronájem bytů",  value: "byty-najem",     Icon: TabIconKey },
-  { label: "Pronájem domů",  value: "domy-najem",     Icon: TabIconHouseTree },
-  { label: "Pozemky",        value: "pozemky-prodej", Icon: TabIconPlot },
+// Group tabs (top level)
+const GROUP_TABS = [
+  { label: "Nákup",    value: "nakup",    Icon: TabIconHome,  cats: ["byty-prodej", "domy-prodej"] },
+  { label: "Pronájem", value: "pronajem", Icon: TabIconKey,   cats: ["byty-najem",  "domy-najem"]  },
+  { label: "Pozemky",  value: "pozemky",  Icon: TabIconPlot,  cats: ["pozemky-prodej"]             },
 ];
+
+// Sub-tabs per group
+const SUB_TABS: Record<string, { label: string; value: string; Icon: () => React.JSX.Element }[]> = {
+  nakup:    [{ label: "Byty", value: "byty-prodej", Icon: TabIconHome }, { label: "Domy", value: "domy-prodej", Icon: TabIconHouseTree }],
+  pronajem: [{ label: "Byty", value: "byty-najem",  Icon: TabIconHome }, { label: "Domy", value: "domy-najem",  Icon: TabIconHouseTree }],
+};
 
 function getHeadline(category?: string): { main: string; highlight: string; sub: string } {
   switch (category) {
@@ -214,6 +219,17 @@ export default function SearchHero({ activeCategory, activeLocation }: Props) {
   const [apiResults, setApiResults] = useState<Suggestion[] | null>(null);
   const [loading, setLoading] = useState(false);
 
+  // Filter state
+  const [selectedLayouts, setSelectedLayouts] = useState<string[]>([]);
+  const [selectedPrice, setSelectedPrice] = useState<{ min: string; max: string }>({ min: "", max: "" });
+  const [priceDropOpen, setPriceDropOpen] = useState(false);
+  const priceRef = useRef<HTMLDivElement>(null);
+
+  // Derive active group and sub-categories from activeCategory
+  const activeCats = activeCategory ? activeCategory.split(",").filter(Boolean) : [];
+  const activeGroup = GROUP_TABS.find(g => g.cats.some(c => activeCats.includes(c)))?.value ?? "";
+  const subTabs = activeGroup ? SUB_TABS[activeGroup] : null;
+
   // Merge curated + API results (curated first, no duplicates)
   const suggestions: Suggestion[] = (() => {
     if (query.length < 2) return DEFAULT_SUGGESTIONS;
@@ -247,12 +263,12 @@ export default function SearchHero({ activeCategory, activeLocation }: Props) {
   // Close on outside click
   useEffect(() => {
     function handler(e: MouseEvent) {
-      if (
-        wrapperRef.current &&
-        !wrapperRef.current.contains(e.target as Node)
-      ) {
+      if (wrapperRef.current && !wrapperRef.current.contains(e.target as Node)) {
         setOpen(false);
         setActiveIdx(-1);
+      }
+      if (priceRef.current && !priceRef.current.contains(e.target as Node)) {
+        setPriceDropOpen(false);
       }
     }
     document.addEventListener("mousedown", handler);
@@ -262,24 +278,47 @@ export default function SearchHero({ activeCategory, activeLocation }: Props) {
   // Reset activeIdx when suggestions change
   useEffect(() => { setActiveIdx(-1); }, [query]);
 
+  function buildParams(location: string, categoryOverride?: string) {
+    const params = new URLSearchParams();
+    const cat = categoryOverride !== undefined ? categoryOverride : (activeCategory || "");
+    if (cat) params.set("category", cat);
+    if (location) params.set("location", location);
+    if (selectedLayouts.length > 0) params.set("layout", selectedLayouts.join(","));
+    if (selectedPrice.min) params.set("min_price", selectedPrice.min);
+    if (selectedPrice.max) params.set("max_price", selectedPrice.max);
+    params.set("sort", "newest");
+    return params;
+  }
+
+  function navigateGroup(groupValue: string) {
+    const group = GROUP_TABS.find(g => g.value === groupValue);
+    if (!group) return;
+    // If already fully active → clear
+    const alreadyActive = group.cats.every(c => activeCats.includes(c));
+    const newCat = alreadyActive ? "" : group.cats.join(",");
+    router.push(`/inzerce?${buildParams(query.trim(), newCat).toString()}`);
+  }
+
+  function navigateSub(cat: string) {
+    const newCats = activeCats.includes(cat)
+      ? activeCats.filter(c => c !== cat)
+      : [...activeCats, cat];
+    router.push(`/inzerce?${buildParams(query.trim(), newCats.join(",")).toString()}`);
+  }
+
   const pick = useCallback((label: string) => {
     setQuery(label);
     setOpen(false);
     setActiveIdx(-1);
     setApiResults(null);
-    const params = new URLSearchParams();
-    if (activeCategory) params.set("category", activeCategory);
-    params.set("location", label);
-    params.set("sort", "newest");
+    const params = buildParams(label);
     router.push(`/inzerce?${params.toString()}`);
-  }, [activeCategory, router]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeCategory, router, selectedLayouts, selectedPrice]);
 
   function submit(loc?: string) {
     const location = loc ?? query.trim();
-    const params = new URLSearchParams();
-    if (activeCategory) params.set("category", activeCategory);
-    if (location) params.set("location", location);
-    params.set("sort", "newest");
+    const params = buildParams(location);
     router.push(`/inzerce?${params.toString()}`);
   }
 
@@ -346,25 +385,143 @@ export default function SearchHero({ activeCategory, activeLocation }: Props) {
           <p className="mt-3 text-base text-muted md:text-lg">{headline.sub}</p>
         </div>
 
-        {/* Category tabs */}
-        <div className="flex flex-wrap justify-center gap-2 mb-6">
-          {CATEGORY_TABS.map((tab) => {
-            const active = activeCategory === tab.value;
+        {/* Group tabs (Nákup / Pronájem / Pozemky) */}
+        <div className="flex flex-wrap justify-center gap-2 mb-3">
+          {GROUP_TABS.map((group) => {
+            const fullyActive = group.cats.every(c => activeCats.includes(c));
+            const partlyActive = !fullyActive && group.cats.some(c => activeCats.includes(c));
             return (
-              <a
-                key={tab.value}
-                href={`/inzerce?category=${tab.value}&sort=newest`}
-                className={`flex items-center gap-1.5 rounded-xl border px-3.5 py-2 text-sm font-semibold transition-all ${
-                  active
+              <button
+                key={group.value}
+                type="button"
+                onClick={() => navigateGroup(group.value)}
+                className={`flex items-center gap-1.5 rounded-xl border px-4 py-2 text-sm font-semibold transition-all ${
+                  fullyActive || partlyActive
                     ? "border-accent/50 bg-accent/15 text-accent-light shadow-sm shadow-accent/10"
                     : "border-border bg-card/60 text-muted hover:border-accent/30 hover:text-foreground hover:bg-card/80"
                 }`}
               >
-                <tab.Icon />
-                {tab.label}
-              </a>
+                <group.Icon />
+                {group.label}
+              </button>
             );
           })}
+        </div>
+
+        {/* Sub-tabs (Byty / Domy) — shown when a group with subs is active */}
+        {subTabs && (
+          <div className="flex justify-center gap-2 mb-4">
+            {subTabs.map((sub) => {
+              const active = activeCats.includes(sub.value);
+              return (
+                <button
+                  key={sub.value}
+                  type="button"
+                  onClick={() => navigateSub(sub.value)}
+                  className={`flex items-center gap-1.5 rounded-lg border px-3.5 py-1.5 text-xs font-semibold transition-all ${
+                    active
+                      ? "border-accent/40 bg-accent/10 text-accent-light"
+                      : "border-border/60 bg-card/40 text-muted/70 hover:border-accent/30 hover:text-foreground"
+                  }`}
+                >
+                  <sub.Icon />
+                  {sub.label}
+                </button>
+              );
+            })}
+          </div>
+        )}
+
+        {/* ── Quick filters ──────────────────────────────────── */}
+        <div className="flex flex-wrap items-center justify-center gap-2 mb-6">
+          {/* Dispozice pills — multi-select */}
+          <div className="flex items-center gap-1.5">
+            <span className="text-xs font-semibold text-muted mr-1">Dispozice</span>
+            {["1+kk", "2+kk", "3+kk", "3+1", "4+kk", "5+"].map((l) => (
+              <button
+                key={l}
+                type="button"
+                onClick={() => setSelectedLayouts(prev =>
+                  prev.includes(l) ? prev.filter(x => x !== l) : [...prev, l]
+                )}
+                className={`rounded-lg border px-3 py-1.5 text-xs font-semibold transition-all ${
+                  selectedLayouts.includes(l)
+                    ? "border-accent/50 bg-accent/15 text-accent-light shadow-sm shadow-accent/10"
+                    : "border-border bg-card/60 text-muted hover:border-accent/30 hover:text-foreground"
+                }`}
+              >
+                {l}
+              </button>
+            ))}
+          </div>
+
+          <div className="h-5 w-px bg-border/40 mx-1" />
+
+          {/* Price dropdown */}
+          <div ref={priceRef} className="relative">
+            <button
+              type="button"
+              onClick={() => setPriceDropOpen((o) => !o)}
+              className={`flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-semibold transition-all ${
+                selectedPrice.min || selectedPrice.max
+                  ? "border-accent/50 bg-accent/15 text-accent-light shadow-sm shadow-accent/10"
+                  : "border-border bg-card/60 text-muted hover:border-accent/30 hover:text-foreground"
+              }`}
+            >
+              {selectedPrice.min || selectedPrice.max
+                ? [
+                    selectedPrice.min && `od ${Number(selectedPrice.min) >= 1_000_000 ? `${(Number(selectedPrice.min) / 1_000_000).toFixed(0)} M` : `${Math.round(Number(selectedPrice.min) / 1_000)} tis.`}`,
+                    selectedPrice.max && `do ${Number(selectedPrice.max) >= 1_000_000 ? `${(Number(selectedPrice.max) / 1_000_000).toFixed(0)} M` : `${Math.round(Number(selectedPrice.max) / 1_000)} tis.`}`,
+                  ].filter(Boolean).join(" ")
+                : "Cena"}
+              {selectedPrice.min || selectedPrice.max ? (
+                <span
+                  role="button"
+                  onClick={(e) => { e.stopPropagation(); setSelectedPrice({ min: "", max: "" }); setPriceDropOpen(false); }}
+                  className="flex h-4 w-4 items-center justify-center rounded-full bg-accent/20 text-accent-light hover:bg-accent/40"
+                >
+                  <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
+                    <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+                  </svg>
+                </span>
+              ) : (
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"
+                  className={`transition-transform ${priceDropOpen ? "rotate-180" : ""}`}>
+                  <polyline points="6 9 12 15 18 9"/>
+                </svg>
+              )}
+            </button>
+            {priceDropOpen && (
+              <div className="absolute left-1/2 -translate-x-1/2 top-full z-[200] mt-2 w-56 overflow-hidden rounded-xl border border-border bg-card shadow-2xl shadow-black/60">
+                <div className="p-3 space-y-2">
+                  <div className="text-[10px] font-bold uppercase tracking-widest text-muted">Cenový rozsah</div>
+                  <div className="grid grid-cols-2 gap-1.5">
+                    {[
+                      { label: "do 2 M", min: "", max: "2000000" },
+                      { label: "do 5 M", min: "", max: "5000000" },
+                      { label: "do 10 M", min: "", max: "10000000" },
+                      { label: "5–10 M", min: "5000000", max: "10000000" },
+                      { label: "10–20 M", min: "10000000", max: "20000000" },
+                      { label: "20 M+", min: "20000000", max: "" },
+                    ].map((q) => (
+                      <button
+                        key={q.label}
+                        type="button"
+                        onClick={() => { setSelectedPrice({ min: q.min, max: q.max }); setPriceDropOpen(false); }}
+                        className={`rounded-lg border px-2.5 py-2 text-xs font-medium transition-colors ${
+                          selectedPrice.min === q.min && selectedPrice.max === q.max
+                            ? "border-accent/50 bg-accent/15 text-accent-light"
+                            : "border-border bg-background text-muted hover:border-accent/30 hover:text-foreground"
+                        }`}
+                      >
+                        {q.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Search + autocomplete — wrapper is NOT overflow-hidden so dropdown escapes */}
