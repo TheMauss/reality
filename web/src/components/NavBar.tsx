@@ -189,6 +189,7 @@ export default function NavBar() {
   const isData    = pathname.startsWith("/data") || pathname.startsWith("/prodeje");
   const isMapa    = pathname.startsWith("/mapa");
   const isHome    = pathname === "/";
+  const isWatchdog = pathname.startsWith("/watchdog");
 
   return (
     <nav className="sticky top-0 z-50 border-b border-border/50 bg-background/80 backdrop-blur-2xl">
@@ -241,6 +242,18 @@ export default function NavBar() {
           >
             <IconTrendDown />
             Propady
+          </a>
+
+          <a
+            href="/watchdog"
+            className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-all ${
+              isWatchdog ? "text-amber-400 bg-amber-400/10" : "text-muted hover:text-foreground"
+            }`}
+          >
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>
+            </svg>
+            Hlídací pes
           </a>
 
           <a

@@ -68,6 +68,48 @@ function initSchema(db: Database.Database) {
     CREATE INDEX IF NOT EXISTS idx_pd_detected ON price_drops(detected_at);
     CREATE INDEX IF NOT EXISTS idx_pd_listing ON price_drops(listing_id);
     CREATE INDEX IF NOT EXISTS idx_ac_user ON alert_configs(user_id);
+
+    CREATE TABLE IF NOT EXISTS watchdogs (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER NOT NULL REFERENCES users(id),
+      name TEXT NOT NULL,
+      active INTEGER NOT NULL DEFAULT 1,
+      category TEXT,
+      region_id INTEGER,
+      district_id INTEGER,
+      location TEXT,
+      price_min INTEGER,
+      price_max INTEGER,
+      area_min REAL,
+      area_max REAL,
+      keywords TEXT,
+      watch_new INTEGER NOT NULL DEFAULT 1,
+      watch_drops INTEGER NOT NULL DEFAULT 0,
+      watch_drops_min_pct REAL DEFAULT 5,
+      watch_underpriced INTEGER NOT NULL DEFAULT 0,
+      watch_underpriced_pct REAL DEFAULT 15,
+      watch_returned INTEGER NOT NULL DEFAULT 0,
+      notify_email INTEGER NOT NULL DEFAULT 1,
+      notify_telegram INTEGER NOT NULL DEFAULT 0,
+      notify_frequency TEXT NOT NULL DEFAULT 'instant',
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_wd_user ON watchdogs(user_id);
+    CREATE INDEX IF NOT EXISTS idx_wd_active ON watchdogs(active);
+
+    CREATE TABLE IF NOT EXISTS watchdog_matches (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      watchdog_id INTEGER NOT NULL REFERENCES watchdogs(id),
+      listing_id TEXT NOT NULL,
+      match_type TEXT NOT NULL,
+      match_detail TEXT,
+      notified INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_wm_watchdog ON watchdog_matches(watchdog_id, created_at);
+    CREATE INDEX IF NOT EXISTS idx_wm_listing ON watchdog_matches(listing_id);
+    CREATE INDEX IF NOT EXISTS idx_wm_notified ON watchdog_matches(notified);
   `);
 }
 

@@ -3,6 +3,8 @@ import Database from "better-sqlite3";
 import path from "path";
 import { scrapeAllListings, scrapeLatestListings, DistrictInfo } from "./sreality";
 import { scrapeAllBezrealitky, scrapeLatestBezrealitky } from "./bezrealitky";
+import { runWatchdog } from "./watchdog";
+import type { ScrapeEvents, ParsedListing } from "./watchdog";
 
 const DB_PATH = process.env.SQLITE_PATH || path.join(__dirname, "..", "..", "cenovypad.db");
 
@@ -76,6 +78,48 @@ export async function runScrape() {
       detected_at TEXT NOT NULL
     );
     CREATE INDEX IF NOT EXISTS idx_lc_listing ON listing_changes(listing_id, detected_at);
+
+    CREATE TABLE IF NOT EXISTS watchdogs (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER NOT NULL,
+      name TEXT NOT NULL,
+      active INTEGER NOT NULL DEFAULT 1,
+      category TEXT,
+      region_id INTEGER,
+      district_id INTEGER,
+      location TEXT,
+      price_min INTEGER,
+      price_max INTEGER,
+      area_min REAL,
+      area_max REAL,
+      keywords TEXT,
+      watch_new INTEGER NOT NULL DEFAULT 1,
+      watch_drops INTEGER NOT NULL DEFAULT 0,
+      watch_drops_min_pct REAL DEFAULT 5,
+      watch_underpriced INTEGER NOT NULL DEFAULT 0,
+      watch_underpriced_pct REAL DEFAULT 15,
+      watch_returned INTEGER NOT NULL DEFAULT 0,
+      notify_email INTEGER NOT NULL DEFAULT 1,
+      notify_telegram INTEGER NOT NULL DEFAULT 0,
+      notify_frequency TEXT NOT NULL DEFAULT 'instant',
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_wd_user ON watchdogs(user_id);
+    CREATE INDEX IF NOT EXISTS idx_wd_active ON watchdogs(active);
+
+    CREATE TABLE IF NOT EXISTS watchdog_matches (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      watchdog_id INTEGER NOT NULL,
+      listing_id TEXT NOT NULL,
+      match_type TEXT NOT NULL,
+      match_detail TEXT,
+      notified INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_wm_watchdog ON watchdog_matches(watchdog_id, created_at);
+    CREATE INDEX IF NOT EXISTS idx_wm_listing ON watchdog_matches(listing_id);
+    CREATE INDEX IF NOT EXISTS idx_wm_notified ON watchdog_matches(notified);
   `);
 
   // Migrations for existing DBs
@@ -151,6 +195,13 @@ export async function runScrape() {
   let changeCount = 0;
   let returnedCount = 0;
 
+  // Watchdog events
+  const events: ScrapeEvents = {
+    newListings: [],
+    priceDrops: [],
+    returnedListings: [],
+  };
+
   interface ExistingListing {
     price: number;
     title: string;
@@ -167,6 +218,7 @@ export async function runScrape() {
       if (!existing) {
         insertListing.run(item.id, item.title, item.url, item.location, item.area_m2, item.category, item.price, now, now, item.lat, item.lon, item.region_id, item.district_id);
         upsertSource.run(item.id, item.id, item.url, now, now);
+        events.newListings.push(item);
         newCount++;
       } else {
         // Track field-level changes
@@ -179,6 +231,7 @@ export async function runScrape() {
         // Track re-appearance of previously removed listings
         if (existing.removed_at) {
           insertChange.run(item.id, "returned", existing.removed_at, null, now);
+          events.returnedListings.push(item);
           returnedCount++;
         }
 
@@ -197,6 +250,7 @@ export async function runScrape() {
       if (existing && existing.price > item.price) {
         const dropPct = Math.round(((existing.price - item.price) / existing.price) * 10000) / 100;
         insertDrop.run(item.id, existing.price, item.price, dropPct, now, item.title, item.url, item.location, item.category, item.area_m2);
+        events.priceDrops.push({ listing: item, oldPrice: existing.price, newPrice: item.price, dropPct });
         dropCount++;
         console.log(`  DROP: ${item.title} ${existing.price} → ${item.price} (-${dropPct.toFixed(1)}%)`);
       }
@@ -213,7 +267,10 @@ export async function runScrape() {
   const removedResult = markRemoved.run(now, now);
   const removedCount = removedResult.changes;
 
-  console.log(`Done: ${newCount} new, ${updatedCount} updated, ${dropCount} drops, ${changeCount} field changes, ${removedCount} removed, ${returnedCount} returned`);
+  // Run watchdog checks
+  const watchdogMatches = runWatchdog(db, events);
+
+  console.log(`Done: ${newCount} new, ${updatedCount} updated, ${dropCount} drops, ${changeCount} field changes, ${removedCount} removed, ${returnedCount} returned, ${watchdogMatches} watchdog matches`);
   db.close();
 }
 
@@ -268,6 +325,13 @@ export async function runFastScan() {
   let dropCount = 0;
   let returnedCount = 0;
 
+  // Watchdog events
+  const events: ScrapeEvents = {
+    newListings: [],
+    priceDrops: [],
+    returnedListings: [],
+  };
+
   interface ExistingRow { price: number; removed_at: string | null }
 
   const processAll = db.transaction(() => {
@@ -282,9 +346,13 @@ export async function runFastScan() {
         );
         upsertSource.run(item.id, item.id, item.url, now, now);
         insertHistory.run(item.id, item.price, now);
+        events.newListings.push(item);
         newCount++;
       } else {
-        if (existing.removed_at) returnedCount++;
+        if (existing.removed_at) {
+          events.returnedListings.push(item);
+          returnedCount++;
+        }
 
         updateListing.run(
           item.title, item.url, item.location, item.area_m2,
@@ -300,6 +368,7 @@ export async function runFastScan() {
             item.id, existing.price, item.price, dropPct, now,
             item.title, item.url, item.location, item.category, item.area_m2
           );
+          events.priceDrops.push({ listing: item, oldPrice: existing.price, newPrice: item.price, dropPct });
           dropCount++;
           console.log(`  DROP: ${item.title} ${existing.price} → ${item.price} (-${dropPct.toFixed(1)}%)`);
         }
@@ -309,10 +378,14 @@ export async function runFastScan() {
   });
 
   processAll();
+
+  // Run watchdog checks
+  const watchdogMatches = runWatchdog(db, events);
+
   db.close();
 
-  if (newCount + dropCount + returnedCount > 0) {
-    console.log(`Fast scan: ${newCount} new, ${updatedCount} updated, ${dropCount} drops, ${returnedCount} returned`);
+  if (newCount + dropCount + returnedCount + watchdogMatches > 0) {
+    console.log(`Fast scan: ${newCount} new, ${updatedCount} updated, ${dropCount} drops, ${returnedCount} returned, ${watchdogMatches} watchdog matches`);
   }
 }
 
