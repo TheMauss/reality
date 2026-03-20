@@ -29,7 +29,7 @@ export async function GET(req: NextRequest) {
 
   // ── Level 1: all regions ──────────────────────────────────────────────────
   if (level === "regions") {
-    const rows = db.prepare(`
+    const rows = await db.prepare(`
       SELECT r.id, r.name, r.transactions, r.price_change,
         COALESCE(
           (SELECT h.avg_price_m2 FROM sold_price_history h
@@ -54,7 +54,7 @@ export async function GET(req: NextRequest) {
   // ── Level 2: districts for a region ──────────────────────────────────────
   if (level === "districts" && regionId) {
     // Compute centroid per district by averaging a sample of transaction GPS; use latest history price
-    const rows = db.prepare(`
+    const rows = await db.prepare(`
       SELECT
         sd.id, sd.name, sd.transactions, sd.price_change, sd.region_id,
         COALESCE(
@@ -82,7 +82,7 @@ export async function GET(req: NextRequest) {
 
   // ── Level 3: transactions for a district (limit to keep DB light) ─────────
   if (level === "transactions" && districtId) {
-    const wardIds = (db.prepare(`
+    const wardIds = (await db.prepare(`
       SELECT id FROM sold_wards WHERE district_id = ?
     `).all(parseInt(districtId, 10)) as { id: number }[]).map(r => r.id);
 
@@ -91,7 +91,7 @@ export async function GET(req: NextRequest) {
     }
 
     const placeholders = wardIds.map(() => "?").join(",");
-    const transactions = db.prepare(`
+    const transactions = await db.prepare(`
       SELECT
         id, lat, lon, title, validation_date AS date,
         ward_avg_price_m2, ward_name, municipality
@@ -114,7 +114,7 @@ export async function GET(req: NextRequest) {
 
   // ── Level 2b: wards (towns) for a district — bubble map level ───────────
   if (level === "towns" && districtId) {
-    const rows = db.prepare(`
+    const rows = await db.prepare(`
       SELECT
         sw.id, sw.name, sw.district_id,
         COUNT(t.id) as tx_count,

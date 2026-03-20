@@ -1,4 +1,4 @@
-import Database from "better-sqlite3";
+import type { Client } from "./turso";
 
 interface Watchdog {
   id: number;
@@ -55,12 +55,10 @@ interface WatchdogMatchInsert {
 
 /**
  * Main watchdog entry point — call after each scrape run.
- * Checks all active watchdogs against scrape events and inserts matches.
  */
-export function runWatchdog(db: Database.Database, events: ScrapeEvents): number {
-  const watchdogs = db
-    .prepare("SELECT * FROM watchdogs WHERE active = 1")
-    .all() as Watchdog[];
+export async function runWatchdog(client: Client, events: ScrapeEvents): Promise<number> {
+  const watchdogRows = (await client.execute("SELECT * FROM watchdogs WHERE active = 1")).rows;
+  const watchdogs = watchdogRows as unknown as Watchdog[];
 
   if (watchdogs.length === 0) return 0;
 
@@ -125,7 +123,7 @@ export function runWatchdog(db: Database.Database, events: ScrapeEvents): number
     }
   }
 
-  // Check underpriced listings (new + price drops combined)
+  // Check underpriced listings
   const underpricedWatchdogs = watchdogs.filter((w) => w.watch_underpriced);
   if (underpricedWatchdogs.length > 0) {
     const allRelevant = [
@@ -133,7 +131,6 @@ export function runWatchdog(db: Database.Database, events: ScrapeEvents): number
       ...events.priceDrops.map((d) => d.listing),
     ];
 
-    // Cache avg prices per district to avoid repeated queries
     const avgPriceCache = new Map<string, number | null>();
 
     for (const listing of allRelevant) {
@@ -142,23 +139,15 @@ export function runWatchdog(db: Database.Database, events: ScrapeEvents): number
       for (const wd of underpricedWatchdogs) {
         if (!matchesFilter(listing, wd)) continue;
 
-        const avgPriceM2 = getCachedLocalAvgPriceM2(
-          db,
-          listing,
-          avgPriceCache
-        );
+        const avgPriceM2 = await getCachedLocalAvgPriceM2(client, listing, avgPriceCache);
         if (avgPriceM2 === null) continue;
 
         const listingPriceM2 = listing.price / listing.area_m2;
-        const diffPct =
-          ((avgPriceM2 - listingPriceM2) / avgPriceM2) * 100;
+        const diffPct = ((avgPriceM2 - listingPriceM2) / avgPriceM2) * 100;
 
         if (diffPct >= (wd.watch_underpriced_pct || 15)) {
-          // Avoid duplicate if already matched as "new"
           const alreadyMatched = matches.some(
-            (m) =>
-              m.watchdog_id === wd.id &&
-              m.listing_id === listing.id
+            (m) => m.watchdog_id === wd.id && m.listing_id === listing.id
           );
           if (alreadyMatched) continue;
 
@@ -179,28 +168,19 @@ export function runWatchdog(db: Database.Database, events: ScrapeEvents): number
     }
   }
 
-  // Insert all matches in a transaction
+  // Insert all matches
   if (matches.length > 0) {
-    const insertMatch = db.prepare(
-      "INSERT INTO watchdog_matches (watchdog_id, listing_id, match_type, match_detail) VALUES (?, ?, ?, ?)"
-    );
-
-    const insertAll = db.transaction(() => {
-      for (const m of matches) {
-        insertMatch.run(m.watchdog_id, m.listing_id, m.match_type, m.match_detail);
-      }
-    });
-
-    insertAll();
+    const stmts = matches.map((m) => ({
+      sql: "INSERT INTO watchdog_matches (watchdog_id, listing_id, match_type, match_detail) VALUES (?, ?, ?, ?)",
+      args: [m.watchdog_id, m.listing_id, m.match_type, m.match_detail] as any[],
+    }));
+    await client.batch(stmts, "write");
     console.log(`Watchdog: ${matches.length} matches for ${watchdogs.length} active watchdogs`);
   }
 
   return matches.length;
 }
 
-/**
- * Check if a listing matches a watchdog's filters.
- */
 function matchesFilter(listing: ParsedListing, wd: Watchdog): boolean {
   if (wd.category && listing.category !== wd.category) return false;
   if (wd.region_id && listing.region_id !== wd.region_id) return false;
@@ -214,99 +194,52 @@ function matchesFilter(listing: ParsedListing, wd: Watchdog): boolean {
 
   if (wd.price_min && listing.price < wd.price_min) return false;
   if (wd.price_max && listing.price > wd.price_max) return false;
-
   if (wd.area_min && (listing.area_m2 === null || listing.area_m2 < wd.area_min)) return false;
   if (wd.area_max && (listing.area_m2 === null || listing.area_m2 > wd.area_max)) return false;
 
-  // Keyword matching — check title and description
   if (wd.keywords) {
     try {
       const keywords = JSON.parse(wd.keywords) as string[];
       if (keywords.length > 0) {
-        const text = [
-          listing.title,
-          listing.location,
-          listing.description || "",
-        ]
+        const text = [listing.title, listing.location, listing.description || ""]
           .join(" ")
           .toLowerCase();
-
-        const anyMatch = keywords.some((kw) =>
-          text.includes(kw.toLowerCase())
-        );
-        if (!anyMatch) return false;
+        if (!keywords.some((kw) => text.includes(kw.toLowerCase()))) return false;
       }
-    } catch {
-      // Invalid JSON — ignore keyword filter
-    }
+    } catch { /* */ }
   }
 
   return true;
 }
 
-/**
- * Get average sold price per m² for a listing's location.
- * Uses sold_wards for municipality-level data, falls back to sold_districts.
- */
-function getLocalAvgPriceM2(
-  db: Database.Database,
-  listing: ParsedListing
-): number | null {
-  // Try ward-level (most precise) — match by GPS proximity
-  if (listing.lat && listing.lon) {
-    const ward = db
-      .prepare(
-        `SELECT avg_price_m2 FROM sold_wards
-         WHERE avg_price_m2 IS NOT NULL AND avg_price_m2 > 0
-         ORDER BY ABS(
-           (SELECT AVG(lat) FROM sold_transactions WHERE ward_id = sold_wards.id) - ?
-         ) + ABS(
-           (SELECT AVG(lon) FROM sold_transactions WHERE ward_id = sold_wards.id) - ?
-         )
-         LIMIT 1`
-      )
-      .get(listing.lat, listing.lon) as { avg_price_m2: number } | undefined;
-
-    if (ward?.avg_price_m2) return ward.avg_price_m2;
-  }
-
-  // Fallback: district level
+async function getLocalAvgPriceM2(client: Client, listing: ParsedListing): Promise<number | null> {
   if (listing.district_id) {
-    const district = db
-      .prepare(
-        "SELECT avg_price_m2 FROM sold_districts WHERE id = ? AND avg_price_m2 IS NOT NULL"
-      )
-      .get(listing.district_id) as { avg_price_m2: number } | undefined;
-
-    if (district?.avg_price_m2) return district.avg_price_m2;
+    const row = (await client.execute({
+      sql: "SELECT avg_price_m2 FROM sold_districts WHERE id = ? AND avg_price_m2 IS NOT NULL",
+      args: [listing.district_id],
+    })).rows[0];
+    if (row?.avg_price_m2) return row.avg_price_m2 as number;
   }
 
-  // Fallback: region level
   if (listing.region_id) {
-    const region = db
-      .prepare(
-        "SELECT avg_price_m2 FROM sold_regions WHERE id = ? AND avg_price_m2 IS NOT NULL"
-      )
-      .get(listing.region_id) as { avg_price_m2: number } | undefined;
-
-    if (region?.avg_price_m2) return region.avg_price_m2;
+    const row = (await client.execute({
+      sql: "SELECT avg_price_m2 FROM sold_regions WHERE id = ? AND avg_price_m2 IS NOT NULL",
+      args: [listing.region_id],
+    })).rows[0];
+    if (row?.avg_price_m2) return row.avg_price_m2 as number;
   }
 
   return null;
 }
 
-/**
- * Cached wrapper for getLocalAvgPriceM2 — uses district_id as cache key.
- */
-function getCachedLocalAvgPriceM2(
-  db: Database.Database,
+async function getCachedLocalAvgPriceM2(
+  client: Client,
   listing: ParsedListing,
   cache: Map<string, number | null>
-): number | null {
+): Promise<number | null> {
   const key = `${listing.district_id ?? "no-district"}_${listing.region_id ?? "no-region"}`;
   if (cache.has(key)) return cache.get(key)!;
-
-  const result = getLocalAvgPriceM2(db, listing);
+  const result = await getLocalAvgPriceM2(client, listing);
   cache.set(key, result);
   return result;
 }

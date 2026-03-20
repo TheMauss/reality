@@ -1,9 +1,6 @@
 import "dotenv/config";
-import Database from "better-sqlite3";
-import path from "path";
-
-const DB_PATH =
-  process.env.SQLITE_PATH || path.join(__dirname, "..", "..", "cenovypad.db");
+import { getClient } from "./turso";
+import type { Client, InValue } from "./turso";
 
 const SREALITY_BASE = "https://www.sreality.cz/api/v1/price_map";
 const DATE_FROM = "2018-01";
@@ -124,8 +121,8 @@ interface WardInfo {
   hasSubWards?: boolean;
 }
 
-function initSchema(db: Database.Database) {
-  db.exec(`
+async function initSchema(client: Client) {
+  await client.executeMultiple(`
     -- Regions / kraje
     CREATE TABLE IF NOT EXISTS sold_regions (
       id INTEGER PRIMARY KEY,
@@ -199,14 +196,14 @@ function initSchema(db: Database.Database) {
   `);
 
   // Migration: add category column if not exists
-  try { db.exec("ALTER TABLE sold_price_history ADD COLUMN category TEXT NOT NULL DEFAULT 'byty'"); } catch { /* exists */ }
-  try { db.exec("DROP INDEX IF EXISTS sqlite_autoindex_sold_price_history_1"); } catch { /* */ }
-  try { db.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_sph_unique ON sold_price_history(entity_type, entity_id, year, month, category)"); } catch { /* */ }
+  try { await client.execute("ALTER TABLE sold_price_history ADD COLUMN category TEXT NOT NULL DEFAULT 'byty'"); } catch { /* exists */ }
+  try { await client.execute("DROP INDEX IF EXISTS sqlite_autoindex_sold_price_history_1"); } catch { /* */ }
+  try { await client.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_sph_unique ON sold_price_history(entity_type, entity_id, year, month, category)"); } catch { /* */ }
 
   // Migration: add category to transactions
-  try { db.exec("ALTER TABLE sold_transactions ADD COLUMN category TEXT NOT NULL DEFAULT 'byty'"); } catch { /* exists */ }
+  try { await client.execute("ALTER TABLE sold_transactions ADD COLUMN category TEXT NOT NULL DEFAULT 'byty'"); } catch { /* exists */ }
   // Migration: add area_m2
-  try { db.exec("ALTER TABLE sold_transactions ADD COLUMN area_m2 REAL"); } catch { /* exists */ }
+  try { await client.execute("ALTER TABLE sold_transactions ADD COLUMN area_m2 REAL"); } catch { /* exists */ }
 }
 
 /**
@@ -278,29 +275,42 @@ function parseArea(title: string): number | null {
 }
 
 /** Backfill area_m2 for existing rows that have NULL */
-function backfillAreaM2(db: Database.Database) {
-  const rows = db.prepare("SELECT id, title FROM sold_transactions WHERE area_m2 IS NULL").all() as { id: number; title: string }[];
+async function backfillAreaM2(client: Client) {
+  const rows = (await client.execute("SELECT id, title FROM sold_transactions WHERE area_m2 IS NULL")).rows as unknown as { id: number; title: string }[];
   if (rows.length === 0) return;
   console.log(`  Backfilling area_m2 for ${rows.length} transactions...`);
-  const update = db.prepare("UPDATE sold_transactions SET area_m2 = ? WHERE id = ?");
-  const run = db.transaction(() => {
+  const tx = await client.transaction("write");
+  try {
     let updated = 0;
     for (const row of rows) {
       const area = parseArea(row.title);
-      if (area !== null) { update.run(area, row.id); updated++; }
+      if (area !== null) {
+        await tx.execute({ sql: "UPDATE sold_transactions SET area_m2 = ? WHERE id = ?", args: [area, row.id] });
+        updated++;
+      }
     }
+    await tx.commit();
     console.log(`  area_m2 backfilled: ${updated}/${rows.length}`);
-  });
-  run();
+  } catch (err) {
+    await tx.rollback();
+    throw err;
+  }
+}
+
+async function insertHistoryBatch(client: Client, points: SrealityGraphPoint[], entityType: string, entityId: number, categoryLabel: string, now: string) {
+  const stmts = points.map(p => ({
+    sql: "INSERT OR REPLACE INTO sold_price_history (entity_type, entity_id, year, month, avg_price_m2, category, scraped_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+    args: [entityType, entityId, p.year, p.month, p.avg_price_per_sqm, categoryLabel, now] as InValue[]
+  }));
+  if (stmts.length > 0) await client.batch(stmts, "write");
 }
 
 export async function runSoldScrape() {
   const startTime = Date.now();
-  const db = new Database(DB_PATH);
-  db.pragma("journal_mode = WAL");
-  initSchema(db);
+  const client = getClient();
+  await initSchema(client);
 
-  backfillAreaM2(db);
+  await backfillAreaM2(client);
 
   const now = new Date().toISOString();
   console.log("=== Sold Prices Scraper (celá ČR) ===");
@@ -329,22 +339,11 @@ export async function runSoldScrape() {
 
     console.log(`  Found ${regions.length} regions, total num_transactions: ${regionListData.result.num_transactions}`);
 
-    const upsertRegion = db.prepare(`
-      INSERT OR REPLACE INTO sold_regions (id, name, seo_name, avg_price_m2, transactions, price_change, scraped_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
-    `);
-
-    for (const r of regions) {
-      upsertRegion.run(
-        r.locality.entity_id,
-        r.locality.name,
-        r.locality.seo_name,
-        r.avg_price_per_sqm,
-        r.num_transactions,
-        r.price_change,
-        now
-      );
-    }
+    const regionStmts = regions.map(r => ({
+      sql: "INSERT OR REPLACE INTO sold_regions (id, name, seo_name, avg_price_m2, transactions, price_change, scraped_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+      args: [r.locality.entity_id, r.locality.name, r.locality.seo_name, r.avg_price_per_sqm, r.num_transactions, r.price_change, now] as InValue[]
+    }));
+    await client.batch(regionStmts, "write");
 
     // Fetch CR-wide price history
     console.log("  Fetching CR-wide price history...");
@@ -354,28 +353,10 @@ export async function runSoldScrape() {
       date_to: DATE_TO,
     })) as { result: { graph_main: SrealityGraphPoint[] } };
 
-    const upsertHistory = db.prepare(`
-      INSERT OR REPLACE INTO sold_price_history (entity_type, entity_id, year, month, avg_price_m2, category, scraped_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
-    `);
-
-    const insertHistoryBatch = db.transaction(
-      (points: SrealityGraphPoint[], entityType: string, entityId: number) => {
-        for (const p of points) {
-          upsertHistory.run(entityType, entityId, p.year, p.month, p.avg_price_per_sqm, category.label, now);
-        }
-      }
-    );
-
-    insertHistoryBatch(crGraphData.result.graph_main, "country", 112);
+    await insertHistoryBatch(client, crGraphData.result.graph_main, "country", 112, category.label, now);
 
     // --- Step 2: For each region, fetch districts ---
     console.log("\n[2/6] Fetching districts per region...");
-
-    const upsertDistrict = db.prepare(`
-      INSERT OR REPLACE INTO sold_districts (id, region_id, name, seo_name, avg_price_m2, transactions, price_change, scraped_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    `);
 
     const allDistricts: Array<{
       id: number;
@@ -404,33 +385,26 @@ export async function runSoldScrape() {
           }) as Promise<{ result: { graph_main: SrealityGraphPoint[] } }>,
         ]);
 
-        insertHistoryBatch(regionGraphData.result.graph_main, "region", regionId);
+        await insertHistoryBatch(client, regionGraphData.result.graph_main, "region", regionId, category.label, now);
 
         const districts = distListData.result.aggregated_list.filter(
           (a) => a.avg_price_per_sqm !== null
         );
 
-        const insertDistrictBatch = db.transaction(() => {
-          for (const d of districts) {
-            upsertDistrict.run(
-              d.locality.entity_id,
-              regionId,
-              d.locality.name,
-              d.locality.seo_name,
-              d.avg_price_per_sqm,
-              d.num_transactions,
-              d.price_change,
-              now
-            );
-            allDistricts.push({
-              id: d.locality.entity_id,
-              regionId,
-              name: d.locality.name,
-              avgPriceM2: d.avg_price_per_sqm ?? undefined,
-            });
-          }
-        });
-        insertDistrictBatch();
+        const districtStmts = districts.map(d => ({
+          sql: "INSERT OR REPLACE INTO sold_districts (id, region_id, name, seo_name, avg_price_m2, transactions, price_change, scraped_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+          args: [d.locality.entity_id, regionId, d.locality.name, d.locality.seo_name, d.avg_price_per_sqm, d.num_transactions, d.price_change, now] as InValue[]
+        }));
+        await client.batch(districtStmts, "write");
+
+        for (const d of districts) {
+          allDistricts.push({
+            id: d.locality.entity_id,
+            regionId,
+            name: d.locality.name,
+            avgPriceM2: d.avg_price_per_sqm ?? undefined,
+          });
+        }
 
         console.log(`    → ${districts.length} districts`);
       } catch (err) {
@@ -459,16 +433,18 @@ export async function runSoldScrape() {
         })
       );
 
-      const insertBatch = db.transaction(() => {
-        for (const result of results) {
-          if (result.status !== "fulfilled") continue;
-          const { district, points } = result.value;
-          for (const p of points) {
-            upsertHistory.run("district", district.id, p.year, p.month, p.avg_price_per_sqm, category.label, now);
-          }
+      const historyStmts: { sql: string; args: InValue[] }[] = [];
+      for (const result of results) {
+        if (result.status !== "fulfilled") continue;
+        const { district, points } = result.value;
+        for (const p of points) {
+          historyStmts.push({
+            sql: "INSERT OR REPLACE INTO sold_price_history (entity_type, entity_id, year, month, avg_price_m2, category, scraped_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+            args: ["district", district.id, p.year, p.month, p.avg_price_per_sqm, category.label, now] as InValue[]
+          });
         }
-      });
-      insertBatch();
+      }
+      if (historyStmts.length > 0) await client.batch(historyStmts, "write");
 
       if ((i + 5) % 50 === 0 || i + 5 >= allDistricts.length) {
         console.log(
@@ -481,11 +457,6 @@ export async function runSoldScrape() {
 
     // --- Step 4: For each district, fetch wards/obce + detect municipalities with sub-wards ---
     console.log(`\n[4/6] Fetching wards for ${allDistricts.length} districts...`);
-
-    const upsertWard = db.prepare(`
-      INSERT OR REPLACE INTO sold_wards (id, district_id, region_id, name, seo_name, avg_price_m2, transactions, price_change, scraped_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `);
 
     const allWards: WardInfo[] = [];
     // Municipalities that need sub-ward drill-down
@@ -526,44 +497,36 @@ export async function runSoldScrape() {
         })
       );
 
-      const insertWardBatch = db.transaction(() => {
-        for (const result of results) {
-          if (result.status !== "fulfilled") continue;
-          const { district, wards } = result.value;
+      const wardStmts: { sql: string; args: InValue[] }[] = [];
+      for (const result of results) {
+        if (result.status !== "fulfilled") continue;
+        const { district, wards } = result.value;
 
-          for (const w of wards) {
-            upsertWard.run(
-              w.locality.entity_id,
-              district.id,
-              district.regionId,
-              w.locality.name,
-              w.locality.seo_name,
-              w.avg_price_per_sqm,
-              w.num_transactions,
-              w.price_change,
-              now
-            );
+        for (const w of wards) {
+          wardStmts.push({
+            sql: "INSERT OR REPLACE INTO sold_wards (id, district_id, region_id, name, seo_name, avg_price_m2, transactions, price_change, scraped_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            args: [w.locality.entity_id, district.id, district.regionId, w.locality.name, w.locality.seo_name, w.avg_price_per_sqm, w.num_transactions, w.price_change, now] as InValue[]
+          });
 
-            const wardInfo: WardInfo = {
-              id: w.locality.entity_id,
-              districtId: district.id,
-              regionId: district.regionId,
-              name: w.locality.name,
-              avgPriceM2: w.avg_price_per_sqm!,
-            };
+          const wardInfo: WardInfo = {
+            id: w.locality.entity_id,
+            districtId: district.id,
+            regionId: district.regionId,
+            name: w.locality.name,
+            avgPriceM2: w.avg_price_per_sqm!,
+          };
 
-            // Large municipalities likely have sub-wards (entity_type is "municipality")
-            // Municipalities with 100+ transactions likely have sub-divisions worth drilling into
-            if (w.locality.entity_type === "municipality" && w.num_transactions >= 100) {
-              wardInfo.hasSubWards = true;
-              municipalitiesWithSubWards.push(wardInfo);
-            }
-
-            allWards.push(wardInfo);
+          // Large municipalities likely have sub-wards (entity_type is "municipality")
+          // Municipalities with 100+ transactions likely have sub-divisions worth drilling into
+          if (w.locality.entity_type === "municipality" && w.num_transactions >= 100) {
+            wardInfo.hasSubWards = true;
+            municipalitiesWithSubWards.push(wardInfo);
           }
+
+          allWards.push(wardInfo);
         }
-      });
-      insertWardBatch();
+      }
+      if (wardStmts.length > 0) await client.batch(wardStmts, "write");
 
       if ((i + 3) % 15 === 0 || i + 3 >= nonPragueDistricts.length) {
         console.log(
@@ -587,48 +550,40 @@ export async function runSoldScrape() {
           batch.map(muni => fetchMunicipalitySubWards(category.main, muni.id))
         );
 
-        const insertBatch = db.transaction(() => {
-          for (let j = 0; j < batch.length; j++) {
-            const result = results[j];
-            if (result.status !== "fulfilled") continue;
-            const subWards = result.value;
-            const muni = batch[j];
+        const subWardStmts: { sql: string; args: InValue[] }[] = [];
+        for (let j = 0; j < batch.length; j++) {
+          const result = results[j];
+          if (result.status !== "fulfilled") continue;
+          const subWards = result.value;
+          const muni = batch[j];
 
-            if (subWards.length === 0) {
-              // No sub-wards — leaf municipality, allow step 6 to fetch its transactions
-              muni.hasSubWards = false;
-              continue;
-            }
-
-            console.log(`    ${muni.name}: ${subWards.length} sub-wards found`);
-
-            for (const sw of subWards) {
-              upsertWard.run(
-                sw.locality.entity_id,
-                muni.districtId,
-                muni.regionId,
-                sw.locality.name,
-                sw.locality.seo_name,
-                sw.avg_price_per_sqm,
-                sw.num_transactions,
-                sw.price_change,
-                now
-              );
-              allWards.push({
-                id: sw.locality.entity_id,
-                districtId: muni.districtId,
-                regionId: muni.regionId,
-                name: sw.locality.name,
-                avgPriceM2: sw.avg_price_per_sqm!,
-              });
-            }
-
-            // Mark the parent municipality — we'll skip fetching transactions
-            // for it directly since we'll get them from sub-wards
-            muni.hasSubWards = true;
+          if (subWards.length === 0) {
+            // No sub-wards — leaf municipality, allow step 6 to fetch its transactions
+            muni.hasSubWards = false;
+            continue;
           }
-        });
-        insertBatch();
+
+          console.log(`    ${muni.name}: ${subWards.length} sub-wards found`);
+
+          for (const sw of subWards) {
+            subWardStmts.push({
+              sql: "INSERT OR REPLACE INTO sold_wards (id, district_id, region_id, name, seo_name, avg_price_m2, transactions, price_change, scraped_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+              args: [sw.locality.entity_id, muni.districtId, muni.regionId, sw.locality.name, sw.locality.seo_name, sw.avg_price_per_sqm, sw.num_transactions, sw.price_change, now] as InValue[]
+            });
+            allWards.push({
+              id: sw.locality.entity_id,
+              districtId: muni.districtId,
+              regionId: muni.regionId,
+              name: sw.locality.name,
+              avgPriceM2: sw.avg_price_per_sqm!,
+            });
+          }
+
+          // Mark the parent municipality — we'll skip fetching transactions
+          // for it directly since we'll get them from sub-wards
+          muni.hasSubWards = true;
+        }
+        if (subWardStmts.length > 0) await client.batch(subWardStmts, "write");
 
         await delay(300);
       }
@@ -638,11 +593,6 @@ export async function runSoldScrape() {
     console.log(
       `\n[5/6] Fetching Prague sub-wards for ${pragueDistricts.length} city parts...`
     );
-
-    const upsertTransaction = db.prepare(`
-      INSERT OR REPLACE INTO sold_transactions (id, ward_id, title, validation_date, lat, lon, address, municipality, ward_name, ward_avg_price_m2, category, area_m2, scraped_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `);
 
     let totalTransactions = 0;
 
@@ -666,35 +616,30 @@ export async function runSoldScrape() {
         })
       );
 
-      const insertBatch = db.transaction(() => {
-        for (const result of results) {
-          if (result.status !== "fulfilled") continue;
-          const { district, estates, subWards } = result.value;
+      const pragueStmts: { sql: string; args: InValue[] }[] = [];
+      for (const result of results) {
+        if (result.status !== "fulfilled") continue;
+        const { district, estates, subWards } = result.value;
 
-          for (const w of subWards) {
-            upsertWard.run(
-              w.locality.entity_id,
-              district.id,
-              PRAGUE_REGION_ID,
-              w.locality.name,
-              w.locality.seo_name,
-              w.avg_price_per_sqm,
-              w.num_transactions,
-              w.price_change,
-              now
-            );
-            allWards.push({
-              id: w.locality.entity_id,
-              districtId: district.id,
-              regionId: PRAGUE_REGION_ID,
-              name: w.locality.name,
-              avgPriceM2: w.avg_price_per_sqm!,
-            });
-          }
+        for (const w of subWards) {
+          pragueStmts.push({
+            sql: "INSERT OR REPLACE INTO sold_wards (id, district_id, region_id, name, seo_name, avg_price_m2, transactions, price_change, scraped_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            args: [w.locality.entity_id, district.id, PRAGUE_REGION_ID, w.locality.name, w.locality.seo_name, w.avg_price_per_sqm, w.num_transactions, w.price_change, now] as InValue[]
+          });
+          allWards.push({
+            id: w.locality.entity_id,
+            districtId: district.id,
+            regionId: PRAGUE_REGION_ID,
+            name: w.locality.name,
+            avgPriceM2: w.avg_price_per_sqm!,
+          });
+        }
 
-          // Save direct Prague transactions
-          for (const e of estates) {
-            upsertTransaction.run(
+        // Save direct Prague transactions
+        for (const e of estates) {
+          pragueStmts.push({
+            sql: "INSERT OR REPLACE INTO sold_transactions (id, ward_id, title, validation_date, lat, lon, address, municipality, ward_name, ward_avg_price_m2, category, area_m2, scraped_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            args: [
               e.transaction_id,
               district.id,
               e.title,
@@ -708,12 +653,12 @@ export async function runSoldScrape() {
               category.label,
               parseArea(e.title),
               now
-            );
-            totalTransactions++;
-          }
+            ] as InValue[]
+          });
+          totalTransactions++;
         }
-      });
-      insertBatch();
+      }
+      if (pragueStmts.length > 0) await client.batch(pragueStmts, "write");
 
       if ((i + 5) % 25 === 0 || i + 5 >= pragueDistricts.length) {
         console.log(
@@ -743,15 +688,17 @@ export async function runSoldScrape() {
         batch.map(ward => fetchWardTransactionsYearly(category.main, ward.id))
       );
 
-      const insertBatch = db.transaction(() => {
-        for (let j = 0; j < batch.length; j++) {
-          const result = results[j];
-          if (result.status !== "fulfilled") continue;
-          const ward = batch[j];
-          const estates = result.value;
+      const transactionStmts: { sql: string; args: InValue[] }[] = [];
+      for (let j = 0; j < batch.length; j++) {
+        const result = results[j];
+        if (result.status !== "fulfilled") continue;
+        const ward = batch[j];
+        const estates = result.value;
 
-          for (const e of estates) {
-            upsertTransaction.run(
+        for (const e of estates) {
+          transactionStmts.push({
+            sql: "INSERT OR REPLACE INTO sold_transactions (id, ward_id, title, validation_date, lat, lon, address, municipality, ward_name, ward_avg_price_m2, category, area_m2, scraped_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            args: [
               e.transaction_id,
               ward.id,
               e.title,
@@ -765,12 +712,12 @@ export async function runSoldScrape() {
               category.label,
               parseArea(e.title),
               now
-            );
-            totalTransactions++;
-          }
+            ] as InValue[]
+          });
+          totalTransactions++;
         }
-      });
-      insertBatch();
+      }
+      if (transactionStmts.length > 0) await client.batch(transactionStmts, "write");
 
       wardsDone += batch.length;
       if (wardsDone % 50 === 0 || wardsDone >= wardsToFetch.length) {
@@ -796,8 +743,6 @@ export async function runSoldScrape() {
   console.log(`  Total transactions: ${grandTotalTransactions}`);
   console.log(`  API requests: ${requestCount}`);
   console.log(`  Rate limit hits: ${rateLimitHits}`);
-
-  db.close();
 }
 
 // Run directly

@@ -71,11 +71,11 @@ export async function GET(req: NextRequest) {
   };
   const orderBy = sortMap[sort] || "price ASC";
 
-  const countRow = db
+  const countRow = await db
     .prepare(`SELECT COUNT(*) as total FROM listings ${where}`)
     .get(...params) as { total: number };
 
-  const rows = db
+  const rows = await db
     .prepare(
       `SELECT *,
         CASE WHEN area_m2 > 0 THEN ROUND(price * 1.0 / area_m2) ELSE NULL END as price_m2

@@ -9,11 +9,11 @@ export async function GET(req: NextRequest) {
 
   const db = getDB();
 
-  const region = db
+  const region = await db
     .prepare("SELECT * FROM sold_regions WHERE id = ?")
     .get(regionId);
 
-  const districts = db
+  const districts = await db
     .prepare(
       `SELECT d.*,
         (SELECT COUNT(*) FROM sold_wards WHERE district_id = d.id) as ward_count,
@@ -28,7 +28,7 @@ export async function GET(req: NextRequest) {
     .all(regionId);
 
   // Asking + rental prices + liquidity per district from listings
-  const askingPrices = db
+  const askingPrices = await db
     .prepare(
       `SELECT l.district_id,
         ROUND(AVG(CASE WHEN l.area_m2 > 0 AND l.category = 'byty-prodej' THEN l.price * 1.0 / l.area_m2 END)) as asking_m2,
@@ -51,7 +51,7 @@ export async function GET(req: NextRequest) {
   );
 
   // Region-level fallback (when listings lack district_id)
-  const regionFallback = db
+  const regionFallback = await db
     .prepare(
       `SELECT
         ROUND(AVG(CASE WHEN area_m2 > 0 AND category = 'byty-najem' THEN price * 1.0 / area_m2 END)) as rent_m2,
@@ -89,7 +89,7 @@ export async function GET(req: NextRequest) {
   });
 
   // Region-level asking price as fallback (when listings lack district_id)
-  const regionAsking = db
+  const regionAsking = await db
     .prepare(
       `SELECT
         ROUND(AVG(CASE WHEN area_m2 > 0 AND category = 'byty-prodej' THEN price * 1.0 / area_m2 END)) as asking_m2,

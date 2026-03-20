@@ -9,7 +9,7 @@ export async function GET(req: NextRequest) {
 
   const db = getDB();
 
-  const ward = db
+  const ward = await db
     .prepare(
       `SELECT w.*, d.name as district_name, d.id as district_id,
         r.name as region_name, r.id as region_id
@@ -20,7 +20,7 @@ export async function GET(req: NextRequest) {
     )
     .get(wardId);
 
-  const transactions = db
+  const transactions = await db
     .prepare(
       `SELECT * FROM sold_transactions
       WHERE ward_id = ?
@@ -32,7 +32,7 @@ export async function GET(req: NextRequest) {
   const wardData = ward as Record<string, unknown> | undefined;
   let districtAskingM2: number | null = null;
   if (wardData?.district_id) {
-    const asking = db
+    const asking = await db
       .prepare(
         `SELECT ROUND(AVG(CASE WHEN area_m2 > 0 AND category = 'byty-prodej' THEN price * 1.0 / area_m2 END)) as asking_m2
         FROM listings WHERE district_id = ?`
@@ -42,7 +42,7 @@ export async function GET(req: NextRequest) {
   }
   // Fallback to region-level if district has no data
   if (!districtAskingM2 && wardData?.region_id) {
-    const regionAsking = db
+    const regionAsking = await db
       .prepare(
         `SELECT ROUND(AVG(CASE WHEN area_m2 > 0 AND category = 'byty-prodej' THEN price * 1.0 / area_m2 END)) as asking_m2
         FROM listings WHERE region_id = ?`

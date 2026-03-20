@@ -10,7 +10,7 @@ export async function GET(req: NextRequest) {
   const db = getDB();
 
   if (districtId) {
-    const row = db
+    const row = await db
       .prepare("SELECT avg_price_m2, name FROM sold_districts WHERE id = ?")
       .get(parseInt(districtId, 10)) as { avg_price_m2: number | null; name: string } | undefined;
 
@@ -22,7 +22,7 @@ export async function GET(req: NextRequest) {
   }
 
   if (regionId) {
-    const row = db
+    const row = await db
       .prepare("SELECT avg_price_m2, name FROM sold_regions WHERE id = ?")
       .get(parseInt(regionId, 10)) as { avg_price_m2: number | null; name: string } | undefined;
 

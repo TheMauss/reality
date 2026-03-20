@@ -15,11 +15,11 @@ export async function GET(
   const db = getDB();
   const watchdogId = parseInt(id, 10);
 
-  const countRow = db
+  const countRow = await db
     .prepare("SELECT COUNT(*) as total FROM watchdog_matches WHERE watchdog_id = ?")
     .get(watchdogId) as { total: number };
 
-  const matches = db
+  const matches = await db
     .prepare(
       `SELECT wm.*, l.title, l.url, l.location, l.category, l.area_m2, l.price, l.image_url
        FROM watchdog_matches wm

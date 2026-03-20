@@ -11,7 +11,7 @@ export async function GET(req: NextRequest) {
   }
 
   const db = getWriteDB();
-  const watchdogs = db
+  const watchdogs = await db
     .prepare("SELECT * FROM watchdogs WHERE user_id = ? ORDER BY created_at DESC")
     .all(parseInt(userId, 10));
 
@@ -19,10 +19,10 @@ export async function GET(req: NextRequest) {
   const countStmt = db.prepare(
     "SELECT COUNT(*) as count FROM watchdog_matches WHERE watchdog_id = ?"
   );
-  const result = (watchdogs as Array<Record<string, unknown>>).map((wd) => ({
+  const result = await Promise.all((watchdogs as Array<Record<string, unknown>>).map(async (wd) => ({
     ...wd,
-    match_count: (countStmt.get(wd.id) as { count: number }).count,
-  }));
+    match_count: (await countStmt.get(wd.id) as { count: number }).count,
+  })));
 
   return NextResponse.json({ watchdogs: result });
 }
@@ -40,7 +40,7 @@ export async function POST(req: NextRequest) {
 
   const db = getWriteDB();
 
-  const result = db
+  const result = await db
     .prepare(
       `INSERT INTO watchdogs (
         user_id, name, category, region_id, district_id, location,
@@ -73,7 +73,7 @@ export async function POST(req: NextRequest) {
       body.notify_frequency || "instant"
     );
 
-  const watchdog = db
+  const watchdog = await db
     .prepare("SELECT * FROM watchdogs WHERE id = ?")
     .get(result.lastInsertRowid);
 

@@ -9,7 +9,7 @@ export async function GET(req: NextRequest) {
 
   const db = getDB();
 
-  const district = db
+  const district = await db
     .prepare(
       `SELECT d.*, r.name as region_name, r.id as region_id
       FROM sold_districts d
@@ -20,7 +20,7 @@ export async function GET(req: NextRequest) {
 
   if (district) {
     // Get latest price from history for this district
-    const latestPrice = db
+    const latestPrice = await db
       .prepare(
         `SELECT avg_price_m2 FROM sold_price_history
         WHERE entity_type = 'district' AND entity_id = ? AND category = 'byty'
@@ -33,7 +33,7 @@ export async function GET(req: NextRequest) {
     }
   }
 
-  const wards = db
+  const wards = await db
     .prepare(
       `SELECT w.*,
         (SELECT COUNT(*) FROM sold_transactions WHERE ward_id = w.id) as transaction_count
@@ -44,7 +44,7 @@ export async function GET(req: NextRequest) {
     .all(districtId);
 
   // Get asking + rental + liquidity for this district from listings
-  const districtAsking = db
+  const districtAsking = await db
     .prepare(
       `SELECT
         ROUND(AVG(CASE WHEN area_m2 > 0 AND category = 'byty-prodej' THEN price * 1.0 / area_m2 END)) as asking_m2,
@@ -65,7 +65,7 @@ export async function GET(req: NextRequest) {
   let fallback: { asking_m2: number | null; listing_count: number; rent_m2: number | null; avg_dom: number | null; drop_rate_pct: number | null } | undefined;
   if ((!districtAsking?.asking_m2 || !districtAsking?.avg_dom) && district) {
     const regionId = (district as Record<string, unknown>).region_id;
-    fallback = db
+    fallback = await db
       .prepare(
         `SELECT
           ROUND(AVG(CASE WHEN area_m2 > 0 AND category = 'byty-prodej' THEN price * 1.0 / area_m2 END)) as asking_m2,

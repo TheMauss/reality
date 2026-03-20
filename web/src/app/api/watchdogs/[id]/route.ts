@@ -10,12 +10,12 @@ export async function PUT(
   const body = await req.json();
   const db = getWriteDB();
 
-  const existing = db.prepare("SELECT * FROM watchdogs WHERE id = ?").get(parseInt(id, 10));
+  const existing = await db.prepare("SELECT * FROM watchdogs WHERE id = ?").get(parseInt(id, 10));
   if (!existing) {
     return NextResponse.json({ error: "Watchdog not found" }, { status: 404 });
   }
 
-  db.prepare(
+  await db.prepare(
     `UPDATE watchdogs SET
       name = ?, category = ?, region_id = ?, district_id = ?, location = ?,
       price_min = ?, price_max = ?, area_min = ?, area_max = ?, keywords = ?,
@@ -48,7 +48,7 @@ export async function PUT(
     parseInt(id, 10)
   );
 
-  const updated = db.prepare("SELECT * FROM watchdogs WHERE id = ?").get(parseInt(id, 10));
+  const updated = await db.prepare("SELECT * FROM watchdogs WHERE id = ?").get(parseInt(id, 10));
   return NextResponse.json({ watchdog: updated });
 }
 
@@ -61,8 +61,8 @@ export async function DELETE(
   const db = getWriteDB();
 
   // Delete matches first, then watchdog
-  db.prepare("DELETE FROM watchdog_matches WHERE watchdog_id = ?").run(parseInt(id, 10));
-  const result = db.prepare("DELETE FROM watchdogs WHERE id = ?").run(parseInt(id, 10));
+  await db.prepare("DELETE FROM watchdog_matches WHERE watchdog_id = ?").run(parseInt(id, 10));
+  const result = await db.prepare("DELETE FROM watchdogs WHERE id = ?").run(parseInt(id, 10));
 
   if (result.changes === 0) {
     return NextResponse.json({ error: "Watchdog not found" }, { status: 404 });
@@ -79,7 +79,7 @@ export async function PATCH(
   const { id } = await params;
   const db = getWriteDB();
 
-  const existing = db.prepare("SELECT active FROM watchdogs WHERE id = ?").get(parseInt(id, 10)) as
+  const existing = await db.prepare("SELECT active FROM watchdogs WHERE id = ?").get(parseInt(id, 10)) as
     | { active: number }
     | undefined;
 
@@ -88,7 +88,7 @@ export async function PATCH(
   }
 
   const newActive = existing.active ? 0 : 1;
-  db.prepare("UPDATE watchdogs SET active = ?, updated_at = datetime('now') WHERE id = ?").run(
+  await db.prepare("UPDATE watchdogs SET active = ?, updated_at = datetime('now') WHERE id = ?").run(
     newActive,
     parseInt(id, 10)
   );

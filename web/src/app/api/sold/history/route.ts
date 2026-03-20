@@ -9,7 +9,7 @@ export async function GET(req: NextRequest) {
 
   const db = getDB();
 
-  const history = db
+  const history = await db
     .prepare(
       `SELECT year, month, avg_price_m2
        FROM sold_price_history
@@ -28,7 +28,7 @@ export async function GET(req: NextRequest) {
   try {
     const volExpr = `ROUND(SUM(COALESCE(t.area_m2, 62) * t.ward_avg_price_m2) / 1000000)`;
     if (entityType === "country") {
-      txCounts = db.prepare(`
+      txCounts = await db.prepare(`
         SELECT strftime('%Y', validation_date) as year,
                CAST(strftime('%m', validation_date) AS INTEGER) as month,
                COUNT(*) as count,
@@ -38,7 +38,7 @@ export async function GET(req: NextRequest) {
         GROUP BY year, month
       `).all(category) as typeof txCounts;
     } else if (entityType === "region") {
-      txCounts = db.prepare(`
+      txCounts = await db.prepare(`
         SELECT strftime('%Y', t.validation_date) as year,
                CAST(strftime('%m', t.validation_date) AS INTEGER) as month,
                COUNT(*) as count,
@@ -49,7 +49,7 @@ export async function GET(req: NextRequest) {
         GROUP BY year, month
       `).all(entityId, category) as typeof txCounts;
     } else if (entityType === "district") {
-      txCounts = db.prepare(`
+      txCounts = await db.prepare(`
         SELECT strftime('%Y', t.validation_date) as year,
                CAST(strftime('%m', t.validation_date) AS INTEGER) as month,
                COUNT(*) as count,

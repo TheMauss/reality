@@ -38,7 +38,7 @@ export async function GET(req: NextRequest) {
   if (layouts.length === 1) { where += " AND title LIKE ?"; params.push(`%${layouts[0]}%`); }
   else if (layouts.length > 1) { where += ` AND (${layouts.map(() => "title LIKE ?").join(" OR ")})`; params.push(...layouts.map(l => `%${l}%`)); }
 
-  const listings = db
+  const listings = await db
     .prepare(
       `SELECT
         id, title, location, area_m2, category, price, lat, lon, url,
@@ -51,7 +51,7 @@ export async function GET(req: NextRequest) {
     .all(...params, limit);
 
   const total = (
-    db
+    await db
       .prepare(`SELECT COUNT(*) as c FROM listings ${where}`)
       .get(...params) as { c: number }
   ).c;

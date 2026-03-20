@@ -22,7 +22,7 @@ export async function GET(req: NextRequest) {
 
   // Search sold regions
   try {
-    const regions = db
+    const regions = await db
       .prepare("SELECT id, name, avg_price_m2 FROM sold_regions WHERE name LIKE ? LIMIT 5")
       .all(pattern) as Array<{ id: number; name: string; avg_price_m2: number }>;
     for (const r of regions) {
@@ -32,7 +32,7 @@ export async function GET(req: NextRequest) {
 
   // Search sold districts
   try {
-    const districts = db
+    const districts = await db
       .prepare(
         `SELECT d.id, d.name, d.avg_price_m2, r.name as region_name
         FROM sold_districts d JOIN sold_regions r ON r.id = d.region_id
@@ -46,7 +46,7 @@ export async function GET(req: NextRequest) {
 
   // Search sold wards
   try {
-    const wards = db
+    const wards = await db
       .prepare(
         `SELECT w.id, w.name, w.avg_price_m2, d.name as district_name
         FROM sold_wards w JOIN sold_districts d ON d.id = w.district_id
@@ -59,7 +59,7 @@ export async function GET(req: NextRequest) {
   } catch { /* */ }
 
   // Search listing locations
-  const locationCounts = db
+  const locationCounts = await db
     .prepare(
       `SELECT location, COUNT(*) as count
       FROM listings

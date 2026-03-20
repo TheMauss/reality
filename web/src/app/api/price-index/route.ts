@@ -22,7 +22,7 @@ export async function GET() {
   const db = getDB();
 
   // Price index over time (daily avg price/m² for byty-prodej)
-  const priceIndex = db
+  const priceIndex = await db
     .prepare(
       `SELECT
         DATE(ph.recorded_at) as day,
@@ -39,7 +39,7 @@ export async function GET() {
     .all();
 
   // Per-district price index over time
-  const districtIndex = db
+  const districtIndex = await db
     .prepare(
       `SELECT
         DATE(ph.recorded_at) as day,
