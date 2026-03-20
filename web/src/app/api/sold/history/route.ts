@@ -16,7 +16,7 @@ export async function GET(req: NextRequest) {
        WHERE entity_type = ? AND entity_id = ? AND category = ?
        ORDER BY year ASC, month ASC`
     )
-    .all(entityType, entityId, category) as Array<{
+    .all(entityType, entityId, category) as unknown as Array<{
     year: number;
     month: number;
     avg_price_m2: number;
@@ -36,7 +36,7 @@ export async function GET(req: NextRequest) {
         FROM sold_transactions t
         WHERE category = ?
         GROUP BY year, month
-      `).all(category) as typeof txCounts;
+      `).all(category) as unknown as typeof txCounts;
     } else if (entityType === "region") {
       txCounts = await db.prepare(`
         SELECT strftime('%Y', t.validation_date) as year,
@@ -47,7 +47,7 @@ export async function GET(req: NextRequest) {
         JOIN sold_wards w ON t.ward_id = w.id
         WHERE w.region_id = ? AND t.category = ?
         GROUP BY year, month
-      `).all(entityId, category) as typeof txCounts;
+      `).all(entityId, category) as unknown as typeof txCounts;
     } else if (entityType === "district") {
       txCounts = await db.prepare(`
         SELECT strftime('%Y', t.validation_date) as year,
@@ -58,7 +58,7 @@ export async function GET(req: NextRequest) {
         JOIN sold_wards w ON t.ward_id = w.id
         WHERE w.district_id = ? AND t.category = ?
         GROUP BY year, month
-      `).all(entityId, category) as typeof txCounts;
+      `).all(entityId, category) as unknown as typeof txCounts;
     }
   } catch { /* table might not exist */ }
 

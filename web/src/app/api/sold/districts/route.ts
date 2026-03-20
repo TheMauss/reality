@@ -44,7 +44,7 @@ export async function GET(req: NextRequest) {
       WHERE l.district_id IS NOT NULL AND l.region_id = ?
       GROUP BY l.district_id`
     )
-    .all(regionId) as Array<{ district_id: number; asking_m2: number | null; listing_count: number; rent_m2: number | null; avg_dom: number | null; drop_rate_pct: number | null }>;
+    .all(regionId) as unknown as Array<{ district_id: number; asking_m2: number | null; listing_count: number; rent_m2: number | null; avg_dom: number | null; drop_rate_pct: number | null }>;
 
   const askingMap = Object.fromEntries(
     askingPrices.map((a) => [a.district_id, a])
@@ -64,7 +64,7 @@ export async function GET(req: NextRequest) {
       LEFT JOIN (SELECT DISTINCT listing_id FROM price_drops) pd ON pd.listing_id = listings.id
       WHERE region_id = ?`
     )
-    .get(regionId) as { rent_m2: number | null; avg_dom: number | null; drop_rate_pct: number | null } | undefined;
+    .get(regionId) as unknown as { rent_m2: number | null; avg_dom: number | null; drop_rate_pct: number | null } | undefined;
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const enriched = (districts as any[]).map((d) => {
@@ -97,7 +97,7 @@ export async function GET(req: NextRequest) {
       FROM listings
       WHERE region_id = ?`
     )
-    .get(regionId) as { asking_m2: number | null; listing_count: number } | undefined;
+    .get(regionId) as unknown as { asking_m2: number | null; listing_count: number } | undefined;
 
   return NextResponse.json({ region, districts: enriched, region_asking_m2: regionAsking?.asking_m2 ?? null, region_listing_count: regionAsking?.listing_count ?? 0 });
 }

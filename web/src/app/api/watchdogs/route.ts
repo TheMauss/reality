@@ -21,7 +21,7 @@ export async function GET(req: NextRequest) {
   );
   const result = await Promise.all((watchdogs as Array<Record<string, unknown>>).map(async (wd) => ({
     ...wd,
-    match_count: (await countStmt.get(wd.id) as { count: number }).count,
+    match_count: (await countStmt.get(wd.id as string) as unknown as { count: number }).count,
   })));
 
   return NextResponse.json({ watchdogs: result });
@@ -75,7 +75,7 @@ export async function POST(req: NextRequest) {
 
   const watchdog = await db
     .prepare("SELECT * FROM watchdogs WHERE id = ?")
-    .get(result.lastInsertRowid);
+    .get(result.lastInsertRowid!);
 
   return NextResponse.json({ watchdog }, { status: 201 });
 }

@@ -36,7 +36,7 @@ export async function GET(req: NextRequest) {
       ORDER BY cnt DESC
       LIMIT 8`
     )
-    .all(...params) as Array<{ location: string; lat: number; lon: number; cnt: number }>;
+    .all(...params) as unknown as Array<{ location: string; lat: number; lon: number; cnt: number }>;
 
   return NextResponse.json({ locations: rows });
 }

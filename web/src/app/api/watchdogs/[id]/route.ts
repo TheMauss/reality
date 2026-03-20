@@ -79,7 +79,7 @@ export async function PATCH(
   const { id } = await params;
   const db = getWriteDB();
 
-  const existing = await db.prepare("SELECT active FROM watchdogs WHERE id = ?").get(parseInt(id, 10)) as
+  const existing = await db.prepare("SELECT active FROM watchdogs WHERE id = ?").get(parseInt(id, 10)) as unknown as
     | { active: number }
     | undefined;
 

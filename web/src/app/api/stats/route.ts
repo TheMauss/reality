@@ -5,17 +5,17 @@ export async function GET() {
   const db = getDB();
 
   const totalListings = (
-    await db.prepare("SELECT COUNT(*) as c FROM listings").get() as { c: number }
+    await db.prepare("SELECT COUNT(*) as c FROM listings").get() as unknown as { c: number }
   ).c;
 
   const totalDrops = (
-    await db.prepare("SELECT COUNT(*) as c FROM price_drops").get() as { c: number }
+    await db.prepare("SELECT COUNT(*) as c FROM price_drops").get() as unknown as { c: number }
   ).c;
 
   const avgDrop = (
     await db
       .prepare("SELECT AVG(drop_pct) as avg FROM price_drops")
-      .get() as { avg: number | null }
+      .get() as unknown as { avg: number | null }
   ).avg;
 
   const categories = await db

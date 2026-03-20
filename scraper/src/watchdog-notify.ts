@@ -153,9 +153,6 @@ async function sendTelegramNotification(chatId: string, watchdogName: string, ma
   if (!token) return;
 
   try {
-    const TelegramBot = (await import("node-telegram-bot-api")).default;
-    const bot = new TelegramBot(token);
-
     const lines = matches.slice(0, 10).map((m) => {
       const detail = m.match_detail ? JSON.parse(m.match_detail) : {};
       const typeEmoji: Record<string, string> = { new: "🆕", drop: "📉", underpriced: "💰", returned: "🔄" };
@@ -167,7 +164,16 @@ async function sendTelegramNotification(chatId: string, watchdogName: string, ma
     });
 
     const extra = matches.length > 10 ? `\n\n...a dalších ${matches.length - 10}` : "";
-    await bot.sendMessage(chatId, `🐕 *${watchdogName}*\n\n${lines.join("\n\n")}${extra}`, { parse_mode: "Markdown" });
+    const text = `🐕 *${watchdogName}*\n\n${lines.join("\n\n")}${extra}`;
+
+    const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ chat_id: chatId, text, parse_mode: "Markdown" }),
+    });
+    if (!res.ok) {
+      console.error(`[WATCHDOG TG ERROR] HTTP ${res.status}: ${await res.text()}`);
+    }
   } catch (err) {
     console.error(`[WATCHDOG TG ERROR]`, err);
   }

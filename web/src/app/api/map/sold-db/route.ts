@@ -48,7 +48,7 @@ export async function GET(req: NextRequest) {
     .all(...params, limit);
 
   const total = (
-    await db.prepare(`SELECT COUNT(*) as c FROM sold_transactions ${where}`).get(...params) as { c: number }
+    await db.prepare(`SELECT COUNT(*) as c FROM sold_transactions ${where}`).get(...params) as unknown as { c: number }
   ).c;
 
   return NextResponse.json({ transactions, count: (transactions as unknown[]).length, total });

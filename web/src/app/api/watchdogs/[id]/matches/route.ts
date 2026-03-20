@@ -17,7 +17,7 @@ export async function GET(
 
   const countRow = await db
     .prepare("SELECT COUNT(*) as total FROM watchdog_matches WHERE watchdog_id = ?")
-    .get(watchdogId) as { total: number };
+    .get(watchdogId) as unknown as { total: number };
 
   const matches = await db
     .prepare(

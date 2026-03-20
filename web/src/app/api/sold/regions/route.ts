@@ -45,7 +45,7 @@ export async function GET() {
         AND p.entity_type = 'region' AND p.category = 'byty'
         AND p.year = l.year - 1 AND p.month = l.month`
     )
-    .all() as Array<{ entity_id: number; avg_price_m2: number; yoy_pct: number | null; latest_year: number; latest_month: number; prev_year_price: number | null }>;
+    .all() as unknown as Array<{ entity_id: number; avg_price_m2: number; yoy_pct: number | null; latest_year: number; latest_month: number; prev_year_price: number | null }>;
 
   const latestPriceMap = Object.fromEntries(
     latestPrices.map((p) => [p.entity_id, p])
@@ -67,7 +67,7 @@ export async function GET() {
       WHERE l.region_id IS NOT NULL
       GROUP BY l.region_id`
     )
-    .all() as Array<{ region_id: number; asking_m2: number | null; listing_count: number; avg_dom: number | null; drop_rate_pct: number | null }>;
+    .all() as unknown as Array<{ region_id: number; asking_m2: number | null; listing_count: number; avg_dom: number | null; drop_rate_pct: number | null }>;
 
   const askingMap = Object.fromEntries(
     askingPrices.map((a) => [a.region_id, a])

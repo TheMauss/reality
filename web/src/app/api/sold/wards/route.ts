@@ -26,7 +26,7 @@ export async function GET(req: NextRequest) {
         WHERE entity_type = 'district' AND entity_id = ? AND category = 'byty'
         ORDER BY year DESC, month DESC LIMIT 1`
       )
-      .get(districtId) as { avg_price_m2: number } | undefined;
+      .get(districtId) as unknown as { avg_price_m2: number } | undefined;
 
     if (latestPrice) {
       district.avg_price_m2 = latestPrice.avg_price_m2;
@@ -59,7 +59,7 @@ export async function GET(req: NextRequest) {
       LEFT JOIN (SELECT DISTINCT listing_id FROM price_drops) pd ON pd.listing_id = listings.id
       WHERE district_id = ?`
     )
-    .get(districtId) as { asking_m2: number | null; listing_count: number; rent_m2: number | null; avg_dom: number | null; drop_rate_pct: number | null } | undefined;
+    .get(districtId) as unknown as { asking_m2: number | null; listing_count: number; rent_m2: number | null; avg_dom: number | null; drop_rate_pct: number | null } | undefined;
 
   // Fallback: region-level data when listings lack district_id
   let fallback: { asking_m2: number | null; listing_count: number; rent_m2: number | null; avg_dom: number | null; drop_rate_pct: number | null } | undefined;
@@ -80,7 +80,7 @@ export async function GET(req: NextRequest) {
         LEFT JOIN (SELECT DISTINCT listing_id FROM price_drops) pd ON pd.listing_id = listings.id
         WHERE region_id = ?`
       )
-      .get(regionId) as typeof fallback;
+      .get(regionId as string) as unknown as typeof fallback;
   }
 
   return NextResponse.json({

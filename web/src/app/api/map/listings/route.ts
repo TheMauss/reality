@@ -53,7 +53,7 @@ export async function GET(req: NextRequest) {
   const total = (
     await db
       .prepare(`SELECT COUNT(*) as c FROM listings ${where}`)
-      .get(...params) as { c: number }
+      .get(...params) as unknown as { c: number }
   ).c;
 
   return NextResponse.json({ listings, total });

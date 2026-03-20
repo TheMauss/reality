@@ -446,7 +446,7 @@ export async function runBezrealitkyScan(mode: "fast" | "full"): Promise<void> {
       const existingSource = (await tx.execute({
         sql: "SELECT listing_id FROM listing_sources WHERE source = 'bezrealitky' AND source_id = ?",
         args: [item.source_id],
-      })).rows[0] as { listing_id: string } | undefined;
+      })).rows[0] as unknown as { listing_id: string } | undefined;
 
       if (existingSource) {
         await tx.execute({

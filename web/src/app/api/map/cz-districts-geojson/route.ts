@@ -57,7 +57,7 @@ export async function GET() {
         d.transactions, d.price_change
       FROM sold_districts d
       WHERE d.avg_price_m2 IS NOT NULL
-    `).all() as {
+    `).all() as unknown as {
       id: number; name: string; region_id: number;
       avg_price_m2: number | null; transactions: number; price_change: number | null;
     }[];

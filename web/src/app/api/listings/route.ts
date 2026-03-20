@@ -73,7 +73,7 @@ export async function GET(req: NextRequest) {
 
   const countRow = await db
     .prepare(`SELECT COUNT(*) as total FROM listings ${where}`)
-    .get(...params) as { total: number };
+    .get(...params) as unknown as { total: number };
 
   const rows = await db
     .prepare(
