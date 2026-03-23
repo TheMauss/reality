@@ -160,7 +160,8 @@ async function sendTelegramNotification(chatId: string, watchdogName: string, ma
       let info = "";
       if (m.match_type === "drop") info = ` -${detail.drop_pct?.toFixed(1)}%`;
       else if (m.match_type === "underpriced") info = ` ${detail.diff_pct?.toFixed(1)}% pod průměrem`;
-      return `${emoji} ${m.title || "Inzerát"}${info}\n   📍 ${m.location || "—"} | ${(m.price || 0).toLocaleString("cs-CZ")} Kč`;
+      const link = m.url ? `\n   🔗 ${m.url}` : "";
+      return `${emoji} ${m.title || "Inzerát"}${info}\n   📍 ${m.location || "—"} | ${(m.price || 0).toLocaleString("cs-CZ")} Kč${link}`;
     });
 
     const extra = matches.length > 10 ? `\n\n...a dalších ${matches.length - 10}` : "";
