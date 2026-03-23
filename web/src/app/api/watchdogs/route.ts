@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getWriteDB } from "@/lib/db-write";
-import { getDB } from "@/lib/db";
 import { auth } from "@/auth";
 import { scanExistingListings } from "@/lib/watchdog-scan";
 
@@ -85,7 +84,7 @@ export async function POST(req: NextRequest) {
 
   // Auto-scan existing listings for new watchdog (fire and forget)
   if (watchdog) {
-    scanExistingListings(getDB().client, watchdog).catch(() => {});
+    scanExistingListings(watchdog).catch(() => {});
   }
 
   return NextResponse.json({ watchdog }, { status: 201 });

@@ -1,4 +1,4 @@
-import type { Client, InValue } from "@libsql/client";
+import { getDB } from "@/lib/db";
 
 interface WatchdogConfig {
   id: number;
@@ -15,7 +15,6 @@ interface WatchdogConfig {
   layout: string | null;
   keywords: string | null;
   watch_new: number;
-  watch_drops: number;
 }
 
 interface ListingRow {
@@ -24,23 +23,19 @@ interface ListingRow {
   url: string;
   location: string;
   price: number;
-  price_m2: number | null;
   area_m2: number | null;
-  category: string;
-  first_seen_at: string;
 }
 
 /**
- * Scans existing listings in DB against a watchdog and inserts matches.
+ * Scans existing DB listings against a watchdog and inserts matches.
  * Returns number of new matches inserted.
  */
-export async function scanExistingListings(db: Client, wd: WatchdogConfig): Promise<number> {
-  if (!wd.watch_new && !wd.watch_drops) return 0;
+export async function scanExistingListings(wd: WatchdogConfig): Promise<number> {
+  const db = getDB();
 
   const conditions: string[] = ["removed_at IS NULL"];
-  const args: InValue[] = [];
+  const args: import("@libsql/client").InValue[] = [];
 
-  // Category filter (JSON array or plain string)
   if (wd.category) {
     let cats: string[];
     try { cats = JSON.parse(wd.category); if (!Array.isArray(cats)) cats = [wd.category]; }
@@ -62,55 +57,45 @@ export async function scanExistingListings(db: Client, wd: WatchdogConfig): Prom
   if (wd.price_m2_min) { conditions.push("price_m2 >= ?"); args.push(wd.price_m2_min); }
   if (wd.price_m2_max) { conditions.push("price_m2 <= ?"); args.push(wd.price_m2_max); }
 
-  const where = conditions.join(" AND ");
-  const rows = (await db.execute({
-    sql: `SELECT id, title, url, location, price, price_m2, area_m2, category, first_seen_at
-          FROM listings WHERE ${where}
-          ORDER BY first_seen_at DESC LIMIT 500`,
-    args,
-  })).rows as unknown as ListingRow[];
+  const rows = await db.prepare(
+    `SELECT id, title, url, location, price, area_m2 FROM listings WHERE ${conditions.join(" AND ")} ORDER BY first_seen_at DESC LIMIT 500`
+  ).all(...args) as unknown as ListingRow[];
 
-  // JS-side layout + keyword filters
   let filtered = rows;
 
   if (wd.layout) {
     try {
       const layouts = JSON.parse(wd.layout) as string[];
-      if (layouts.length > 0) {
-        filtered = filtered.filter(r =>
-          layouts.some(l => r.title.toLowerCase().includes(l.toLowerCase()))
-        );
-      }
+      if (layouts.length > 0)
+        filtered = filtered.filter(r => layouts.some(l => r.title.toLowerCase().includes(l.toLowerCase())));
     } catch { /* */ }
   }
 
   if (wd.keywords) {
     try {
       const kws = JSON.parse(wd.keywords) as string[];
-      if (kws.length > 0) {
-        filtered = filtered.filter(r =>
-          kws.some(kw =>
-            r.title.toLowerCase().includes(kw.toLowerCase()) ||
-            r.location.toLowerCase().includes(kw.toLowerCase())
-          )
-        );
-      }
+      if (kws.length > 0)
+        filtered = filtered.filter(r => kws.some(kw =>
+          r.title.toLowerCase().includes(kw.toLowerCase()) ||
+          r.location.toLowerCase().includes(kw.toLowerCase())
+        ));
     } catch { /* */ }
   }
 
   if (filtered.length === 0) return 0;
 
-  // Insert matches (skip already existing ones)
-  const stmts = filtered.map(r => ({
-    sql: `INSERT OR IGNORE INTO watchdog_matches (watchdog_id, listing_id, match_type, match_detail)
-          VALUES (?, ?, 'new', ?)`,
-    args: [
-      wd.id,
-      r.id,
-      JSON.stringify({ price: r.price, area_m2: r.area_m2, location: r.location, source: "db_scan" }),
-    ] as InValue[],
-  }));
+  // Insert in small batches to avoid Turso limits
+  const BATCH = 50;
+  let inserted = 0;
+  for (let i = 0; i < filtered.length; i += BATCH) {
+    const chunk = filtered.slice(i, i + BATCH);
+    const stmts = chunk.map(r => ({
+      sql: `INSERT OR IGNORE INTO watchdog_matches (watchdog_id, listing_id, match_type, match_detail) VALUES (?, ?, 'new', ?)`,
+      args: [wd.id, r.id, JSON.stringify({ price: r.price, area_m2: r.area_m2, location: r.location, source: "db_scan" })] as import("@libsql/client").InValue[],
+    }));
+    await db.batch(stmts);
+    inserted += chunk.length;
+  }
 
-  await db.batch(stmts, "write");
-  return filtered.length;
+  return inserted;
 }
