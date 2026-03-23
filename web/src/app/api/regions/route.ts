@@ -46,7 +46,7 @@ export const REGION_TO_SREALITY_ID: Record<string, number> = {
 export async function GET() {
   const db = getDB();
 
-  const regions = db
+  const regions = await db
     .prepare(
       `SELECT
         ${REGION_EXTRACT} as region,
@@ -68,7 +68,7 @@ export async function GET() {
     )
     .all();
 
-  const countryTotal = db
+  const countryTotal = await db
     .prepare(
       `SELECT
         COUNT(*) as total,

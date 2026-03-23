@@ -28,11 +28,11 @@ export async function GET(req: NextRequest) {
     params.push(`%${location}%`);
   }
 
-  const countRow = db
+  const countRow = await db
     .prepare(`SELECT COUNT(*) as total FROM price_drops pd ${where}`)
-    .get(...params) as { total: number };
+    .get(...params) as unknown as { total: number };
 
-  const rows = db
+  const rows = await db
     .prepare(
       `SELECT pd.*, l.price as current_price, l.url as listing_url, l.first_seen_at
        FROM price_drops pd

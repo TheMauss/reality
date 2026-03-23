@@ -52,7 +52,7 @@ export async function GET(req: NextRequest) {
   const districtExpr = mode === "ward" ? DISTRICT_WARD : DISTRICT_NUMBERED;
 
   // Per-district aggregation
-  const districts = db
+  const districts = await db
     .prepare(
       `SELECT
         ${districtExpr} as district,
@@ -76,7 +76,7 @@ export async function GET(req: NextRequest) {
     .all();
 
   // Prague-wide totals
-  const pragueTotal = db
+  const pragueTotal = await db
     .prepare(
       `SELECT
         COUNT(*) as total,

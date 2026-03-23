@@ -22,7 +22,7 @@ export async function GET(req: NextRequest) {
     params.push(category);
   }
 
-  const rows = db
+  const rows = await db
     .prepare(
       `SELECT
         location,
@@ -36,7 +36,7 @@ export async function GET(req: NextRequest) {
       ORDER BY cnt DESC
       LIMIT 8`
     )
-    .all(...params) as Array<{ location: string; lat: number; lon: number; cnt: number }>;
+    .all(...params) as unknown as Array<{ location: string; lat: number; lon: number; cnt: number }>;
 
   return NextResponse.json({ locations: rows });
 }

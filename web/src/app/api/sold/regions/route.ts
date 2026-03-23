@@ -5,7 +5,7 @@ export async function GET() {
   const db = getDB();
 
   // Check if sold tables exist
-  const tableExists = db
+  const tableExists = await db
     .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='sold_regions'")
     .get();
 
@@ -13,7 +13,7 @@ export async function GET() {
     return NextResponse.json({ regions: [], message: "Run scrape-sold first" });
   }
 
-  const regions = db
+  const regions = await db
     .prepare(
       `SELECT r.*,
         (SELECT COUNT(*) FROM sold_districts WHERE region_id = r.id) as district_count,
@@ -24,7 +24,7 @@ export async function GET() {
     .all();
 
   // Get latest sold price + YOY from price history for each region
-  const latestPrices = db
+  const latestPrices = await db
     .prepare(
       `WITH latest AS (
         SELECT entity_id, avg_price_m2, year, month
@@ -45,14 +45,14 @@ export async function GET() {
         AND p.entity_type = 'region' AND p.category = 'byty'
         AND p.year = l.year - 1 AND p.month = l.month`
     )
-    .all() as Array<{ entity_id: number; avg_price_m2: number; yoy_pct: number | null; latest_year: number; latest_month: number; prev_year_price: number | null }>;
+    .all() as unknown as Array<{ entity_id: number; avg_price_m2: number; yoy_pct: number | null; latest_year: number; latest_month: number; prev_year_price: number | null }>;
 
   const latestPriceMap = Object.fromEntries(
     latestPrices.map((p) => [p.entity_id, p])
   );
 
   // Asking prices + liquidity per region from listings
-  const askingPrices = db
+  const askingPrices = await db
     .prepare(
       `SELECT l.region_id,
         ROUND(AVG(CASE WHEN l.area_m2 > 0 AND l.category = 'byty-prodej' THEN l.price * 1.0 / l.area_m2 END)) as asking_m2,
@@ -67,7 +67,7 @@ export async function GET() {
       WHERE l.region_id IS NOT NULL
       GROUP BY l.region_id`
     )
-    .all() as Array<{ region_id: number; asking_m2: number | null; listing_count: number; avg_dom: number | null; drop_rate_pct: number | null }>;
+    .all() as unknown as Array<{ region_id: number; asking_m2: number | null; listing_count: number; avg_dom: number | null; drop_rate_pct: number | null }>;
 
   const askingMap = Object.fromEntries(
     askingPrices.map((a) => [a.region_id, a])

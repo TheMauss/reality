@@ -1,8 +1,5 @@
-import Database from "better-sqlite3";
-import path from "path";
+import { getClient } from "./turso";
 import { sendDropEmail } from "./email";
-
-const DB_PATH = process.env.SQLITE_PATH || path.join(__dirname, "..", "..", "cenovypad.db");
 
 interface AlertConfigRow {
   user_id: string;
@@ -27,25 +24,27 @@ interface DropRow {
 }
 
 export async function processAlerts() {
-  const db = new Database(DB_PATH);
-  db.pragma("journal_mode = WAL");
+  const client = getClient();
 
   const threeHoursAgo = new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString();
 
-  const recentDrops = db
-    .prepare("SELECT * FROM price_drops WHERE detected_at >= ?")
-    .all(threeHoursAgo) as DropRow[];
+  const recentDrops = (await client.execute({
+    sql: "SELECT * FROM price_drops WHERE detected_at >= ?",
+    args: [threeHoursAgo],
+  })).rows as unknown as DropRow[];
 
   if (recentDrops.length === 0) {
     console.log("No recent drops to alert on");
-    db.close();
     return;
   }
 
-  const alertConfigs = db.prepare("SELECT * FROM alert_configs").all() as AlertConfigRow[];
+  const alertConfigs = (await client.execute("SELECT * FROM alert_configs")).rows as unknown as AlertConfigRow[];
 
   for (const config of alertConfigs) {
-    const user = db.prepare("SELECT * FROM users WHERE email = ?").get(config.user_id) as UserRow | undefined;
+    const user = (await client.execute({
+      sql: "SELECT * FROM users WHERE email = ?",
+      args: [config.user_id],
+    })).rows[0] as unknown as UserRow | undefined;
     if (!user) continue;
 
     const filters = JSON.parse(config.filters);
@@ -82,5 +81,4 @@ export async function processAlerts() {
   }
 
   console.log(`Processed ${alertConfigs.length} alert configs, ${recentDrops.length} recent drops`);
-  db.close();
 }

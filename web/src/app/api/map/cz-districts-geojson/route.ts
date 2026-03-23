@@ -46,7 +46,7 @@ export async function GET() {
     const db = getDB();
 
     // Load all districts with their names and latest prices
-    const districts = db.prepare(`
+    const districts = await db.prepare(`
       SELECT d.id, d.name, d.region_id,
         COALESCE(
           (SELECT h.avg_price_m2 FROM sold_price_history h
@@ -57,7 +57,7 @@ export async function GET() {
         d.transactions, d.price_change
       FROM sold_districts d
       WHERE d.avg_price_m2 IS NOT NULL
-    `).all() as {
+    `).all() as unknown as {
       id: number; name: string; region_id: number;
       avg_price_m2: number | null; transactions: number; price_change: number | null;
     }[];

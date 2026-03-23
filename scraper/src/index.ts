@@ -2,6 +2,7 @@ import "dotenv/config";
 import cron from "node-cron";
 import { runScrape, runFastScan, runBezrealitkyScan } from "./scrape";
 import { runSoldScrape } from "./scrape-sold";
+import { sendInstantNotifications, sendDigestNotifications } from "./watchdog-notify";
 
 const FULL_SCAN_INTERVAL = parseInt(process.env.SCRAPE_INTERVAL_MINUTES || "120", 10);
 
@@ -42,6 +43,10 @@ cron.schedule("* * * * *", async () => {
   try {
     await runFastScan();
     await runBezrealitkyScan("fast");
+    // Send instant watchdog notifications after each scan
+    await sendInstantNotifications().catch(err =>
+      console.error(`[${new Date().toISOString()}] Watchdog instant notify failed:`, err)
+    );
   } catch (err) {
     console.error(`[${new Date().toISOString()}] Fast scan failed:`, err);
   } finally {
@@ -59,6 +64,9 @@ cron.schedule(fullCronExpr, async () => {
   try {
     await runScrape();
     await runBezrealitkyScan("full");
+    await sendInstantNotifications().catch(err =>
+      console.error(`[${new Date().toISOString()}] Watchdog instant notify failed:`, err)
+    );
     console.log(`[${new Date().toISOString()}] Full scan complete`);
   } catch (err) {
     console.error(`[${new Date().toISOString()}] Full scan failed:`, err);
@@ -75,6 +83,28 @@ cron.schedule("0 3 * * *", async () => {
     await runSoldScrape();
   } catch (err) {
     console.error(`[${new Date().toISOString()}] Sold prices scrape failed:`, err);
+  }
+});
+
+// ── Watchdog daily digest: every day at 08:00 ────────────────────────────────
+cron.schedule("0 8 * * *", async () => {
+  console.log(`\n[${new Date().toISOString()}] Watchdog daily digest...`);
+  try {
+    const sent = await sendDigestNotifications("daily");
+    if (sent > 0) console.log(`Watchdog daily digest: ${sent} notifications sent`);
+  } catch (err) {
+    console.error(`[${new Date().toISOString()}] Watchdog daily digest failed:`, err);
+  }
+});
+
+// ── Watchdog weekly digest: every Monday at 08:00 ────────────────────────────
+cron.schedule("0 8 * * 1", async () => {
+  console.log(`\n[${new Date().toISOString()}] Watchdog weekly digest...`);
+  try {
+    const sent = await sendDigestNotifications("weekly");
+    if (sent > 0) console.log(`Watchdog weekly digest: ${sent} notifications sent`);
+  } catch (err) {
+    console.error(`[${new Date().toISOString()}] Watchdog weekly digest failed:`, err);
   }
 });
 

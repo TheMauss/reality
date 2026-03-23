@@ -29,7 +29,7 @@ export async function GET(req: NextRequest) {
 
   // ── Level 1: all regions ──────────────────────────────────────────────────
   if (level === "regions") {
-    const rows = db.prepare(`
+    const rows = await db.prepare(`
       SELECT r.id, r.name, r.transactions, r.price_change,
         COALESCE(
           (SELECT h.avg_price_m2 FROM sold_price_history h
@@ -40,7 +40,7 @@ export async function GET(req: NextRequest) {
       FROM sold_regions r
       WHERE r.avg_price_m2 IS NOT NULL
       ORDER BY r.transactions DESC
-    `).all() as { id: number; name: string; avg_price_m2: number; transactions: number; price_change: number | null }[];
+    `).all() as unknown as { id: number; name: string; avg_price_m2: number; transactions: number; price_change: number | null }[];
 
     const items = rows.map(r => ({
       ...r,
@@ -54,7 +54,7 @@ export async function GET(req: NextRequest) {
   // ── Level 2: districts for a region ──────────────────────────────────────
   if (level === "districts" && regionId) {
     // Compute centroid per district by averaging a sample of transaction GPS; use latest history price
-    const rows = db.prepare(`
+    const rows = await db.prepare(`
       SELECT
         sd.id, sd.name, sd.transactions, sd.price_change, sd.region_id,
         COALESCE(
@@ -72,7 +72,7 @@ export async function GET(req: NextRequest) {
       GROUP BY sd.id
       HAVING lat IS NOT NULL
       ORDER BY sd.transactions DESC
-    `).all(parseInt(regionId, 10)) as {
+    `).all(parseInt(regionId, 10)) as unknown as {
       id: number; name: string; avg_price_m2: number; transactions: number;
       price_change: number | null; region_id: number; lat: number; lon: number;
     }[];
@@ -82,16 +82,16 @@ export async function GET(req: NextRequest) {
 
   // ── Level 3: transactions for a district (limit to keep DB light) ─────────
   if (level === "transactions" && districtId) {
-    const wardIds = (db.prepare(`
+    const wardIds = (await db.prepare(`
       SELECT id FROM sold_wards WHERE district_id = ?
-    `).all(parseInt(districtId, 10)) as { id: number }[]).map(r => r.id);
+    `).all(parseInt(districtId, 10)) as unknown as { id: number }[]).map(r => r.id);
 
     if (wardIds.length === 0) {
       return NextResponse.json({ level: "transactions", items: [], wardCount: 0 });
     }
 
     const placeholders = wardIds.map(() => "?").join(",");
-    const transactions = db.prepare(`
+    const transactions = await db.prepare(`
       SELECT
         id, lat, lon, title, validation_date AS date,
         ward_avg_price_m2, ward_name, municipality
@@ -100,7 +100,7 @@ export async function GET(req: NextRequest) {
         AND lat IS NOT NULL AND lon IS NOT NULL
       ORDER BY validation_date DESC
       LIMIT 800
-    `).all(...wardIds) as {
+    `).all(...wardIds) as unknown as {
       id: number; lat: number; lon: number; title: string; date: string;
       ward_avg_price_m2: number | null; ward_name: string; municipality: string;
     }[];
@@ -114,7 +114,7 @@ export async function GET(req: NextRequest) {
 
   // ── Level 2b: wards (towns) for a district — bubble map level ───────────
   if (level === "towns" && districtId) {
-    const rows = db.prepare(`
+    const rows = await db.prepare(`
       SELECT
         sw.id, sw.name, sw.district_id,
         COUNT(t.id) as tx_count,
@@ -127,7 +127,7 @@ export async function GET(req: NextRequest) {
       GROUP BY sw.id
       HAVING tx_count >= 3
       ORDER BY tx_count DESC
-    `).all(parseInt(districtId, 10)) as {
+    `).all(parseInt(districtId, 10)) as unknown as {
       id: number; name: string; district_id: number;
       tx_count: number; lat: number; lon: number; avg_price_m2: number | null;
     }[];

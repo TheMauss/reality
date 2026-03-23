@@ -1,0 +1,10 @@
+{
+  "framework": "nextjs",
+  "rootDirectory": "web",
+  "buildCommand": "npm run build",
+  "installCommand": "npm install",
+  "env": {
+    "TURSO_URL": "@turso-url",
+    "TURSO_AUTH_TOKEN": "@turso-auth-token"
+  }
+}

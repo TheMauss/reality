@@ -36,7 +36,7 @@ export async function GET(req: NextRequest) {
 
   const where = `WHERE ${conditions.join(" AND ")}`;
 
-  const transactions = db
+  const transactions = await db
     .prepare(
       `SELECT id, title, validation_date as date, lat, lon,
               address, ward_name, ward_avg_price_m2, category, municipality
@@ -48,7 +48,7 @@ export async function GET(req: NextRequest) {
     .all(...params, limit);
 
   const total = (
-    db.prepare(`SELECT COUNT(*) as c FROM sold_transactions ${where}`).get(...params) as { c: number }
+    await db.prepare(`SELECT COUNT(*) as c FROM sold_transactions ${where}`).get(...params) as unknown as { c: number }
   ).c;
 
   return NextResponse.json({ transactions, count: (transactions as unknown[]).length, total });

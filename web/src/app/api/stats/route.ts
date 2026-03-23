@@ -5,26 +5,26 @@ export async function GET() {
   const db = getDB();
 
   const totalListings = (
-    db.prepare("SELECT COUNT(*) as c FROM listings").get() as { c: number }
+    await db.prepare("SELECT COUNT(*) as c FROM listings").get() as unknown as { c: number }
   ).c;
 
   const totalDrops = (
-    db.prepare("SELECT COUNT(*) as c FROM price_drops").get() as { c: number }
+    await db.prepare("SELECT COUNT(*) as c FROM price_drops").get() as unknown as { c: number }
   ).c;
 
   const avgDrop = (
-    db
+    await db
       .prepare("SELECT AVG(drop_pct) as avg FROM price_drops")
-      .get() as { avg: number | null }
+      .get() as unknown as { avg: number | null }
   ).avg;
 
-  const categories = db
+  const categories = await db
     .prepare(
       "SELECT category, COUNT(*) as count FROM listings GROUP BY category ORDER BY count DESC"
     )
     .all();
 
-  const recentDrops = db
+  const recentDrops = await db
     .prepare(
       `SELECT pd.*, l.url as listing_url
        FROM price_drops pd

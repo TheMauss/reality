@@ -40,3 +40,62 @@ export interface AlertConfig {
     min_drop_pct?: number;
   };
 }
+
+export interface Watchdog {
+  id: number;
+  user_id: number;
+  name: string;
+  active: number;
+  category: string | null;
+  region_id: number | null;
+  district_id: number | null;
+  location: string | null;
+  price_min: number | null;
+  price_max: number | null;
+  area_min: number | null;
+  area_max: number | null;
+  keywords: string | null; // JSON array
+  watch_new: number;
+  watch_drops: number;
+  watch_drops_min_pct: number;
+  watch_underpriced: number;
+  watch_underpriced_pct: number;
+  watch_returned: number;
+  notify_email: number;
+  notify_telegram: number;
+  notify_frequency: "instant" | "daily" | "weekly";
+  created_at: string;
+  updated_at: string;
+}
+
+export interface WatchdogMatch {
+  id: number;
+  watchdog_id: number;
+  listing_id: string;
+  match_type: "new" | "drop" | "underpriced" | "returned";
+  match_detail: string | null; // JSON
+  notified: number;
+  created_at: string;
+}
+
+export interface ScrapeEvents {
+  newListings: ParsedListing[];
+  priceDrops: { listing: ParsedListing; oldPrice: number; newPrice: number; dropPct: number }[];
+  returnedListings: ParsedListing[];
+}
+
+export interface ParsedListing {
+  id: string;
+  title: string;
+  url: string;
+  location: string;
+  area_m2: number | null;
+  category: string;
+  price: number;
+  lat: number | null;
+  lon: number | null;
+  region_id: number | null;
+  district_id: number | null;
+  description?: string | null;
+  image_url?: string | null;
+}

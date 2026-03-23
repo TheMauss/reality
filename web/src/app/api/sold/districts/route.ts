@@ -9,11 +9,11 @@ export async function GET(req: NextRequest) {
 
   const db = getDB();
 
-  const region = db
+  const region = await db
     .prepare("SELECT * FROM sold_regions WHERE id = ?")
     .get(regionId);
 
-  const districts = db
+  const districts = await db
     .prepare(
       `SELECT d.*,
         (SELECT COUNT(*) FROM sold_wards WHERE district_id = d.id) as ward_count,
@@ -28,7 +28,7 @@ export async function GET(req: NextRequest) {
     .all(regionId);
 
   // Asking + rental prices + liquidity per district from listings
-  const askingPrices = db
+  const askingPrices = await db
     .prepare(
       `SELECT l.district_id,
         ROUND(AVG(CASE WHEN l.area_m2 > 0 AND l.category = 'byty-prodej' THEN l.price * 1.0 / l.area_m2 END)) as asking_m2,
@@ -44,14 +44,14 @@ export async function GET(req: NextRequest) {
       WHERE l.district_id IS NOT NULL AND l.region_id = ?
       GROUP BY l.district_id`
     )
-    .all(regionId) as Array<{ district_id: number; asking_m2: number | null; listing_count: number; rent_m2: number | null; avg_dom: number | null; drop_rate_pct: number | null }>;
+    .all(regionId) as unknown as Array<{ district_id: number; asking_m2: number | null; listing_count: number; rent_m2: number | null; avg_dom: number | null; drop_rate_pct: number | null }>;
 
   const askingMap = Object.fromEntries(
     askingPrices.map((a) => [a.district_id, a])
   );
 
   // Region-level fallback (when listings lack district_id)
-  const regionFallback = db
+  const regionFallback = await db
     .prepare(
       `SELECT
         ROUND(AVG(CASE WHEN area_m2 > 0 AND category = 'byty-najem' THEN price * 1.0 / area_m2 END)) as rent_m2,
@@ -64,7 +64,7 @@ export async function GET(req: NextRequest) {
       LEFT JOIN (SELECT DISTINCT listing_id FROM price_drops) pd ON pd.listing_id = listings.id
       WHERE region_id = ?`
     )
-    .get(regionId) as { rent_m2: number | null; avg_dom: number | null; drop_rate_pct: number | null } | undefined;
+    .get(regionId) as unknown as { rent_m2: number | null; avg_dom: number | null; drop_rate_pct: number | null } | undefined;
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const enriched = (districts as any[]).map((d) => {
@@ -89,7 +89,7 @@ export async function GET(req: NextRequest) {
   });
 
   // Region-level asking price as fallback (when listings lack district_id)
-  const regionAsking = db
+  const regionAsking = await db
     .prepare(
       `SELECT
         ROUND(AVG(CASE WHEN area_m2 > 0 AND category = 'byty-prodej' THEN price * 1.0 / area_m2 END)) as asking_m2,
@@ -97,7 +97,7 @@ export async function GET(req: NextRequest) {
       FROM listings
       WHERE region_id = ?`
     )
-    .get(regionId) as { asking_m2: number | null; listing_count: number } | undefined;
+    .get(regionId) as unknown as { asking_m2: number | null; listing_count: number } | undefined;
 
   return NextResponse.json({ region, districts: enriched, region_asking_m2: regionAsking?.asking_m2 ?? null, region_listing_count: regionAsking?.listing_count ?? 0 });
 }
