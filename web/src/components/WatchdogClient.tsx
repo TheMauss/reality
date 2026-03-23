@@ -412,6 +412,21 @@ export default function WatchdogClient() {
     fetchWatchdogs();
   }
 
+  async function handleScan(id: number) {
+    const btn = document.getElementById(`scan-btn-${id}`);
+    if (btn) btn.textContent = "Hledám…";
+    try {
+      const res = await fetch(`/api/watchdogs/${id}/scan`, { method: "POST" });
+      const data = await res.json();
+      if (btn) btn.textContent = data.count > 0 ? `+${data.count} shod` : "Žádné shody";
+      setTimeout(() => { if (btn) btn.textContent = "Prohledat DB"; }, 3000);
+      if (data.count > 0) fetchWatchdogs();
+    } catch {
+      if (btn) btn.textContent = "Chyba";
+      setTimeout(() => { if (btn) btn.textContent = "Prohledat DB"; }, 2000);
+    }
+  }
+
   async function handleDelete(id: number) {
     if (!confirm("Opravdu smazat hlídacího psa?")) return;
     await fetch(`/api/watchdogs/${id}`, { method: "DELETE" });
@@ -912,6 +927,10 @@ export default function WatchdogClient() {
                     <button onClick={() => handleEdit(wd)}
                       className="rounded-lg border border-border px-3 py-1.5 text-xs text-muted hover:text-foreground hover:border-accent/30 transition-colors">
                       Upravit
+                    </button>
+                    <button id={`scan-btn-${wd.id}`} onClick={() => handleScan(wd.id)}
+                      className="rounded-lg border border-accent/20 px-3 py-1.5 text-xs text-accent-light hover:bg-accent/10 transition-colors">
+                      Prohledat DB
                     </button>
                     <button onClick={() => handleToggle(wd.id)}
                       className={`rounded-lg border px-3 py-1.5 text-xs transition-colors ${wd.active ? "border-amber-500/30 text-amber-400 hover:bg-amber-500/10" : "border-green-500/30 text-green-400 hover:bg-green-500/10"}`}>

@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getWriteDB } from "@/lib/db-write";
+import { getDB } from "@/lib/db";
 import { auth } from "@/auth";
+import { scanExistingListings } from "@/lib/watchdog-scan";
 
 async function migrate(db: ReturnType<typeof getWriteDB>) {
   for (const col of [
@@ -79,6 +81,12 @@ export async function POST(req: NextRequest) {
     body.notify_frequency || "instant",
   );
 
-  const watchdog = await db.prepare("SELECT * FROM watchdogs WHERE id = ?").get(result.lastInsertRowid!);
+  const watchdog = await db.prepare("SELECT * FROM watchdogs WHERE id = ?").get(result.lastInsertRowid!) as any;
+
+  // Auto-scan existing listings for new watchdog (fire and forget)
+  if (watchdog) {
+    scanExistingListings(getDB().client, watchdog).catch(() => {});
+  }
+
   return NextResponse.json({ watchdog }, { status: 201 });
 }
