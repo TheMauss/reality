@@ -1,115 +1,86 @@
 "use client";
 
 import React, { useState, useRef, useEffect } from "react";
+import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 
-// ── SVG Icons ──────────────────────────────────────────────────────────────
+// ── Icons ────────────────────────────────────────────────────────────────────
 
-function IconHome() {
+const IcoHome = () => (
+  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/>
+  </svg>
+);
+
+const IcoDom = () => (
+  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <rect x="3" y="10" width="18" height="11" rx="1"/><path d="M1 10l11-8 11 8"/>
+    <path d="M9 21V13h6v8"/>
+  </svg>
+);
+
+const IcoMap = () => (
+  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6"/>
+    <line x1="8" y1="2" x2="8" y2="18"/><line x1="16" y1="6" x2="16" y2="22"/>
+  </svg>
+);
+
+const IcoChevron = ({ open }: { open?: boolean }) => (
+  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"
+    className={`transition-transform duration-200 ${open ? "rotate-180" : ""}`}>
+    <polyline points="6 9 12 15 18 9"/>
+  </svg>
+);
+
+const IcoHeart = ({ filled }: { filled?: boolean }) => (
+  <svg width="13" height="13" viewBox="0 0 24 24" fill={filled ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2">
+    <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
+  </svg>
+);
+
+const IcoTrendDown = () => (
+  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+    <polyline points="23 18 13.5 8.5 8.5 13.5 1 6"/><polyline points="17 18 23 18 23 12"/>
+  </svg>
+);
+
+// ── Logo ─────────────────────────────────────────────────────────────────────
+
+function Logo() {
   return (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
-      <polyline points="9 22 9 12 15 12 15 22"/>
-    </svg>
+    <Link href="/" className="group flex items-center gap-2.5 shrink-0">
+      <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-gradient-to-br from-accent to-purple-600 shadow-md shadow-accent/20 group-hover:shadow-accent/40 transition-shadow">
+        <IcoTrendDown />
+      </div>
+      <span className="hidden sm:flex items-baseline gap-px text-[15px] font-bold tracking-tight">
+        <span className="bg-gradient-to-r from-accent-light to-purple-400 bg-clip-text text-transparent">Cenový</span>
+        <span className="text-foreground">Pád</span>
+      </span>
+    </Link>
   );
 }
 
-function IconHouseGarden() {
+// ── Dropdown menu ─────────────────────────────────────────────────────────────
+
+type NavItem = { label: string; href: string; Icon: React.FC; desc: string };
+
+function Dropdown({ items }: { items: NavItem[] }) {
   return (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
-      <polyline points="9 22 9 12 15 12 15 22"/>
-      <path d="M12 22v-4"/>
-      <path d="M8 22c0-2 1-3 2-4"/>
-    </svg>
-  );
-}
-
-function IconPlot() {
-  return (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <rect x="3" y="3" width="18" height="18" rx="2"/>
-      <path d="M3 9h18M9 21V9"/>
-    </svg>
-  );
-}
-
-function IconSparkle() {
-  return (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1"/>
-    </svg>
-  );
-}
-
-function IconKey() {
-  return (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <circle cx="7.5" cy="15.5" r="5.5"/>
-      <path d="M21 2l-9.6 9.6M15.5 7.5l3 3"/>
-    </svg>
-  );
-}
-
-function IconMap() {
-  return (
-    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6"/>
-      <line x1="8" y1="2" x2="8" y2="18"/>
-      <line x1="16" y1="6" x2="16" y2="22"/>
-    </svg>
-  );
-}
-
-function IconTrendDown() {
-  return (
-    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-      <polyline points="23 18 13.5 8.5 8.5 13.5 1 6"/>
-      <polyline points="17 18 23 18 23 12"/>
-    </svg>
-  );
-}
-
-// ── Nav data ────────────────────────────────────────────────────────────────
-
-const NAKUP = [
-  { label: "Prodej bytů",  href: "/inzerce?category=byty-prodej&sort=newest",    Icon: IconHome,       desc: "Byty a apartmány" },
-  { label: "Prodej domů",  href: "/inzerce?category=domy-prodej&sort=newest",    Icon: IconHouseGarden, desc: "Rodinné domy a vily" },
-  { label: "Pozemky",      href: "/inzerce?category=pozemky-prodej&sort=newest", Icon: IconPlot,       desc: "Stavební pozemky" },
-  { label: "Nejnovější",   href: "/inzerce?sort=newest",                          Icon: IconSparkle,    desc: "Právě přidáno" },
-];
-
-const PRONAJEM = [
-  { label: "Pronájem bytů", href: "/inzerce?category=byty-najem&sort=newest", Icon: IconKey,        desc: "Byty a pokoje" },
-  { label: "Pronájem domů", href: "/inzerce?category=domy-najem&sort=newest", Icon: IconHouseGarden, desc: "Domy a chalupy" },
-  { label: "Nejnovější",    href: "/inzerce?category=byty-najem&sort=newest", Icon: IconSparkle,    desc: "Nové nabídky" },
-];
-
-// ── Dropdown ────────────────────────────────────────────────────────────────
-
-function Dropdown({
-  items,
-}: {
-  items: { label: string; href: string; Icon: () => React.ReactElement; desc: string }[];
-}) {
-  return (
-    <div className="absolute left-0 top-full pt-2.5 z-50 min-w-[230px]">
-      <div className="rounded-2xl border border-border/80 bg-card shadow-2xl shadow-black/60 overflow-hidden">
-        <div className="p-1.5 space-y-0.5">
+    <div className="absolute left-0 top-full pt-3 z-50 min-w-[220px] animate-slide-up">
+      <div className="rounded-2xl border border-border/80 bg-card shadow-2xl shadow-black/70 overflow-hidden">
+        <div className="p-1.5 space-y-px">
           {items.map((item) => (
-            <a
-              key={item.href}
-              href={item.href}
-              className="flex items-center gap-3 px-3 py-2.5 rounded-xl transition-colors hover:bg-card-hover group"
-            >
-              <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-border/60 bg-background/60 text-muted group-hover:text-accent-light group-hover:border-accent/30 transition-colors">
+            <a key={item.href} href={item.href}
+              className="flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all hover:bg-card-hover group">
+              <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-border/60 bg-background/40 text-muted group-hover:text-accent-light group-hover:border-accent/30 transition-all">
                 <item.Icon />
               </span>
               <div>
-                <div className="text-sm font-semibold text-foreground group-hover:text-accent-light transition-colors">
+                <div className="text-[13px] font-semibold text-foreground group-hover:text-accent-light transition-colors leading-none mb-0.5">
                   {item.label}
                 </div>
-                <div className="text-xs text-muted">{item.desc}</div>
+                <div className="text-[11px] text-muted leading-none">{item.desc}</div>
               </div>
             </a>
           ))}
@@ -119,50 +90,60 @@ function Dropdown({
   );
 }
 
-// ── NavDropdown ─────────────────────────────────────────────────────────────
+// ── NavDropdown ───────────────────────────────────────────────────────────────
 
-function NavDropdown({
-  label,
-  href,
-  items,
-  isActive,
-}: {
-  label: string;
-  href: string;
-  items: { label: string; href: string; Icon: () => React.ReactElement; desc: string }[];
-  isActive: boolean;
+function NavDropdown({ label, href, items, active }: {
+  label: string; href: string; items: NavItem[]; active: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const show = () => { if (timer.current) clearTimeout(timer.current); setOpen(true); };
-  const hide = () => { timer.current = setTimeout(() => setOpen(false), 120); };
+  const hide = () => { timer.current = setTimeout(() => setOpen(false), 130); };
 
   return (
     <div className="relative" onMouseEnter={show} onMouseLeave={hide}>
-      <a
-        href={href}
-        className={`relative flex items-center gap-1 rounded-lg px-3.5 py-2 text-sm font-medium transition-all ${
-          isActive ? "text-foreground" : "text-muted hover:text-foreground"
-        }`}
-      >
+      <a href={href} className={`relative flex items-center gap-1 px-3 py-2 text-[13px] font-medium rounded-lg transition-colors ${
+        active ? "text-foreground" : "text-muted hover:text-foreground"
+      }`}>
         {label}
-        <svg
-          width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"
-          className={`opacity-50 transition-transform duration-200 ${open ? "rotate-180" : ""}`}
-        >
-          <polyline points="6 9 12 15 18 9" />
-        </svg>
-        {isActive && (
-          <span className="absolute inset-x-2 -bottom-[11px] h-px rounded-full bg-accent-light/60" />
-        )}
+        <IcoChevron open={open} />
+        {active && <span className="absolute inset-x-2 -bottom-[13px] h-[2px] rounded-full bg-accent-light/70" />}
       </a>
       {open && <Dropdown items={items} />}
     </div>
   );
 }
 
-// ── NavBar ───────────────────────────────────────────────────────────────────
+// ── NavLink ───────────────────────────────────────────────────────────────────
+
+function NavLink({ href, label, active }: { href: string; label: string; active: boolean }) {
+  return (
+    <a href={href} className={`relative px-3 py-2 text-[13px] font-medium rounded-lg transition-colors ${
+      active ? "text-foreground" : "text-muted hover:text-foreground"
+    }`}>
+      {label}
+      {active && <span className="absolute inset-x-2 -bottom-[13px] h-[2px] rounded-full bg-accent-light/70" />}
+    </a>
+  );
+}
+
+// ── Nav data ──────────────────────────────────────────────────────────────────
+
+const NAKUP: NavItem[] = [
+  { label: "Prodej bytů",   href: "/inzerce?category=byty-prodej&sort=newest",    Icon: IcoHome, desc: "Byty a apartmány" },
+  { label: "Prodej domů",   href: "/inzerce?category=domy-prodej&sort=newest",    Icon: IcoDom,  desc: "Rodinné domy a vily" },
+  { label: "Pozemky",       href: "/inzerce?category=pozemky-prodej&sort=newest", Icon: IcoMap,  desc: "Stavební pozemky" },
+  { label: "Nejnovější",    href: "/inzerce?sort=newest",                          Icon: IcoHome, desc: "Právě přidáno" },
+];
+
+const PRONAJEM: NavItem[] = [
+  { label: "Pronájem bytů", href: "/inzerce?category=byty-najem&sort=newest",  Icon: IcoHome, desc: "Byty a pokoje" },
+  { label: "Pronájem domů", href: "/inzerce?category=domy-najem&sort=newest",  Icon: IcoDom,  desc: "Domy a chalupy" },
+  { label: "Nejnovější",    href: "/inzerce?category=byty-najem&sort=newest",  Icon: IcoHome, desc: "Nové nabídky" },
+];
+
+// ── NavBar ────────────────────────────────────────────────────────────────────
 
 export default function NavBar() {
   const pathname = usePathname();
@@ -191,89 +172,56 @@ export default function NavBar() {
   const isHome    = pathname === "/";
 
   return (
-    <nav className="sticky top-0 z-50 border-b border-border/50 bg-background/80 backdrop-blur-2xl">
-      <div className="mx-auto flex h-14 max-w-7xl items-center justify-between px-6">
+    <nav className="sticky top-0 z-50 border-b border-border/60 glass">
+      <div className="mx-auto flex h-[60px] max-w-7xl items-center justify-between px-5 md:px-8">
 
-        {/* Logo */}
-        <a href="/" className="group flex items-center gap-2.5 shrink-0">
-          <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-gradient-to-br from-accent to-purple-600 shadow-lg shadow-accent/20 transition-shadow group-hover:shadow-accent/40">
-            <IconTrendDown />
-          </div>
-          <span className="text-base font-bold tracking-tight">
-            <span className="bg-gradient-to-r from-accent-light to-purple-400 bg-clip-text text-transparent">Cenový</span>
-            <span className="text-foreground">Pád</span>
-          </span>
-        </a>
+        <Logo />
 
-        {/* Main nav */}
-        <div className="flex items-center gap-0.5">
-          <NavDropdown label="Nákup"    href="/inzerce"                     items={NAKUP}    isActive={isNakup} />
-          <NavDropdown label="Pronájem" href="/inzerce?category=byty-najem" items={PRONAJEM} isActive={isNajem} />
-
-          <a
-            href="/prodej"
-            className={`relative rounded-lg px-3.5 py-2 text-sm font-medium transition-all ${
-              isProdej ? "text-foreground" : "text-muted hover:text-foreground"
-            }`}
-          >
-            Prodej
-            {isProdej && <span className="absolute inset-x-2 -bottom-[11px] h-px rounded-full bg-accent-light/60" />}
-          </a>
-
-          <a
-            href="/prodeje"
-            className={`relative rounded-lg px-3.5 py-2 text-sm font-medium transition-all ${
-              isData ? "text-foreground" : "text-muted hover:text-foreground"
-            }`}
-          >
-            Data
-            {isData && <span className="absolute inset-x-2 -bottom-[11px] h-px rounded-full bg-accent-light/60" />}
-          </a>
+        {/* Center nav */}
+        <div className="hidden md:flex items-center gap-0.5">
+          <NavDropdown label="Nákup"    href="/inzerce"                     items={NAKUP}    active={isNakup} />
+          <NavDropdown label="Pronájem" href="/inzerce?category=byty-najem" items={PRONAJEM} active={isNajem} />
+          <NavLink href="/prodej"  label="Prodej"  active={isProdej} />
+          <NavLink href="/prodeje" label="Data"    active={isData} />
         </div>
 
-        {/* Right utilities */}
-        <div className="flex items-center gap-1.5 shrink-0">
-          <a
-            href="/"
-            className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-all ${
-              isHome ? "text-red bg-red/10" : "text-muted hover:text-foreground"
-            }`}
-          >
-            <IconTrendDown />
+        {/* Right actions */}
+        <div className="flex items-center gap-1.5">
+          {/* Propady */}
+          <Link href="/"
+            className={`hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-semibold transition-all ${
+              isHome
+                ? "bg-red-dim text-red border border-red/20"
+                : "text-muted hover:text-foreground"
+            }`}>
+            <IcoTrendDown />
             Propady
-          </a>
+          </Link>
 
-          <a
-            href="/ulozene"
-            className={`relative flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium transition-all ${
+          {/* Saved */}
+          <a href="/ulozene"
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-[12px] font-semibold transition-all ${
               savedCount > 0
-                ? "border-red/20 bg-red/5 text-foreground hover:border-red/30 hover:bg-red/10"
-                : "border-border bg-card text-muted hover:border-accent/30 hover:bg-card-hover hover:text-foreground"
-            }`}
-          >
-            <svg width="11" height="11" viewBox="0 0 24 24"
-              fill={savedCount > 0 ? "currentColor" : "none"}
-              stroke="currentColor" strokeWidth={savedCount > 0 ? "1.5" : "2"}
-              className={savedCount > 0 ? "text-red/80" : "text-muted"}>
-              <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
-            </svg>
-            Uložené
+                ? "border-red/25 bg-red-dim text-red hover:border-red/40"
+                : "border-border bg-card text-muted hover:border-border-light hover:text-foreground"
+            }`}>
+            <IcoHeart filled={savedCount > 0} />
+            <span className="hidden sm:inline">Uložené</span>
             {savedCount > 0 && (
-              <span className="flex h-4 min-w-4 items-center justify-center rounded-full bg-red/80 px-1 text-[9px] font-bold text-white">
+              <span className="flex h-4 min-w-4 items-center justify-center rounded-full bg-red/80 px-1 text-[10px] font-bold text-white">
                 {savedCount}
               </span>
             )}
           </a>
 
-          <a
-            href="/mapa"
-            className={`flex items-center gap-1.5 rounded-xl border px-3.5 py-1.5 text-xs font-semibold transition-all ${
+          {/* Mapa CTA */}
+          <a href="/mapa"
+            className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-[12px] font-bold transition-all border ${
               isMapa
-                ? "border-accent/40 bg-accent/10 text-accent-light"
-                : "border-border bg-card text-foreground hover:border-accent/30 hover:bg-card-hover"
-            }`}
-          >
-            <IconMap />
+                ? "bg-accent/15 border-accent/40 text-accent-light"
+                : "bg-accent border-accent text-white hover:bg-accent-light shadow-sm shadow-accent/20"
+            }`}>
+            <IcoMap />
             Mapa
           </a>
         </div>

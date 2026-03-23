@@ -630,7 +630,7 @@ export default function InzerceClient({ listings, total, pages, currentPage, sp,
     return (
       <div className="fixed top-14 left-0 right-0 bottom-0 z-30 flex flex-col bg-background">
         {/* ── Toolbar ──────────────────────────────────────────── */}
-        <div className="shrink-0 border-b border-border/60 bg-background/95 backdrop-blur-xl relative z-40">
+        <div className="shrink-0 border-b border-border/60 bg-background/95 backdrop-blur-xl relative z-[1000]">
           <div className="flex items-center gap-2 px-4 py-2 overflow-x-auto">
             {/* Search */}
             <CompactSearch location={sp.location} />

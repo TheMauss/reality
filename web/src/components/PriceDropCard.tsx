@@ -18,54 +18,57 @@ interface PriceDrop {
   area_m2: number | null;
 }
 
-function formatPrice(price: number): string {
-  if (price >= 1_000_000) {
-    return `${(price / 1_000_000).toFixed(1)} M Kč`;
-  }
-  return `${Math.round(price).toLocaleString("cs-CZ")} Kč`;
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+function fmtPrice(n: number): string {
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(2).replace(/\.?0+$/, "")} M Kč`;
+  return `${Math.round(n).toLocaleString("cs-CZ")} Kč`;
 }
 
-function formatCategory(cat: string): { label: string; color: string; bg: string } {
-  const map: Record<string, { label: string; color: string; bg: string }> = {
-    "byty-prodej": { label: "Byt · Prodej",  color: "#818cf8", bg: "rgba(129,140,248,0.12)" },
-    "byty-najem":  { label: "Byt · Nájem",   color: "#22c55e", bg: "rgba(34,197,94,0.12)" },
-    "domy-prodej": { label: "Dům · Prodej",  color: "#f97316", bg: "rgba(249,115,22,0.12)" },
-    "domy-najem":  { label: "Dům · Nájem",   color: "#eab308", bg: "rgba(234,179,8,0.12)" },
-  };
-  return map[cat] || { label: cat, color: "#6b7280", bg: "rgba(107,114,128,0.12)" };
+function fmtSaved(n: number): string {
+  if (n >= 1_000_000) return `−${(n / 1_000_000).toFixed(1)} M Kč`;
+  return `−${Math.round(n).toLocaleString("cs-CZ")} Kč`;
 }
 
-function timeAgo(dateStr: string): string {
-  const diff = Date.now() - new Date(dateStr).getTime();
-  const hours = Math.floor(diff / 3600000);
-  if (hours < 1) return "právě teď";
-  if (hours < 24) return `před ${hours}h`;
-  const days = Math.floor(hours / 24);
-  return `před ${days}d`;
+function timeAgo(d: string): string {
+  const h = Math.floor((Date.now() - new Date(d).getTime()) / 3_600_000);
+  if (h < 1) return "Právě teď";
+  if (h < 24) return `Před ${h}h`;
+  const days = Math.floor(h / 24);
+  return `Před ${days}d`;
 }
+
+const CAT: Record<string, { label: string; color: string }> = {
+  "byty-prodej": { label: "Byt · Prodej",  color: "#818CF8" },
+  "byty-najem":  { label: "Byt · Nájem",   color: "#10B981" },
+  "domy-prodej": { label: "Dům · Prodej",  color: "#F97316" },
+  "domy-najem":  { label: "Dům · Nájem",   color: "#F59E0B" },
+};
+
+// ── Hooks ─────────────────────────────────────────────────────────────────────
 
 function useThumb(id: string) {
-  const [imgUrl, setImgUrl] = useState<string | null>(null);
+  const [url, setUrl] = useState<string | null>(null);
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
     const obs = new IntersectionObserver(
-      (entries) => {
-        if (entries[0].isIntersecting) {
+      ([e]) => {
+        if (e.isIntersecting) {
           obs.disconnect();
           fetch(`/api/sreality-detail?id=${id}`)
-            .then((r) => (r.ok ? r.json() : null))
-            .then((d) => { if (d?.images?.[0]) setImgUrl(d.images[0]); })
+            .then(r => r.ok ? r.json() : null)
+            .then(d => { if (d?.images?.[0]) setUrl(d.images[0]); })
             .catch(() => {});
         }
       },
-      { rootMargin: "300px" }
+      { rootMargin: "400px" }
     );
     obs.observe(el);
     return () => obs.disconnect();
   }, [id]);
-  return { ref, imgUrl };
+  return { ref, url };
 }
 
 function useSaved(id: string) {
@@ -73,153 +76,156 @@ function useSaved(id: string) {
   useEffect(() => {
     try {
       const arr: string[] = JSON.parse(localStorage.getItem("saved_listings") || "[]");
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setSaved(arr.includes(id));
-    } catch { /* ignore */ }
+    } catch { /**/ }
   }, [id]);
 
   function toggle(e: React.MouseEvent) {
-    e.preventDefault();
-    e.stopPropagation();
+    e.preventDefault(); e.stopPropagation();
     try {
       const arr: string[] = JSON.parse(localStorage.getItem("saved_listings") || "[]");
-      const next = arr.includes(id) ? arr.filter((x) => x !== id) : [...arr, id];
+      const next = arr.includes(id) ? arr.filter(x => x !== id) : [...arr, id];
       localStorage.setItem("saved_listings", JSON.stringify(next));
       setSaved(next.includes(id));
-    } catch { /* ignore */ }
+      window.dispatchEvent(new Event("storage"));
+    } catch { /**/ }
   }
 
   return { saved, toggle };
 }
 
+// ── Empty photo placeholder ───────────────────────────────────────────────────
+
+function PhotoPlaceholder({ color }: { color: string }) {
+  return (
+    <div className="h-full w-full flex items-center justify-center"
+      style={{ background: `linear-gradient(145deg, #0D0C14 0%, ${color}12 100%)` }}>
+      <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="0.8" className="text-border/50">
+        <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
+        <polyline points="9 22 9 12 15 12 15 22"/>
+      </svg>
+    </div>
+  );
+}
+
+// ── Card ─────────────────────────────────────────────────────────────────────
+
 export default function PriceDropCard({ drop }: { drop: PriceDrop }) {
   const rawUrl = drop.listing_url || drop.url;
   const srealityUrl = fixSrealityUrl(rawUrl, drop.listing_id, drop.title, drop.location, drop.category);
-  const cat = formatCategory(drop.category);
-  const { ref, imgUrl } = useThumb(drop.listing_id);
+  const cat = CAT[drop.category] ?? { label: drop.category, color: "#71717A" };
+  const { ref, url: imgUrl } = useThumb(drop.listing_id);
   const { saved, toggle } = useSaved(drop.listing_id);
   const saved_amount = drop.old_price - drop.new_price;
   const pct = drop.drop_pct;
+  const isHot = pct >= 15;
 
   return (
-    <div
-      ref={ref}
-      className="group flex flex-col rounded-xl border border-border bg-card overflow-hidden transition-all hover:border-red/30 hover:shadow-xl hover:shadow-black/30 hover:-translate-y-0.5"
-    >
-      {/* Image area */}
-      <div className="relative h-40 shrink-0 overflow-hidden bg-card-hover">
-        {imgUrl ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={imgUrl}
-            alt={drop.title}
-            className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
-          />
-        ) : (
-          <div
-            className="h-full w-full flex items-center justify-center"
-            style={{ background: "linear-gradient(135deg, #1a1d27 0%, #1f1a2e 100%)" }}
-          >
-            <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1" className="text-border">
-              <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/>
-            </svg>
-          </div>
-        )}
+    <div ref={ref}
+      className="group flex flex-col rounded-2xl border border-border bg-card overflow-hidden card-lift hover:border-red/20">
 
-        {/* Drop badge — animated pulse for big drops */}
-        <div className="absolute top-2.5 left-2.5 flex items-center gap-1.5">
-          <span className={`rounded-lg px-2.5 py-1 text-sm font-bold text-white shadow-lg shadow-red/30 ${pct >= 15 ? "bg-red animate-pulse" : "bg-red"}`}>
-            −{pct.toFixed(1)}%
+      {/* ── Photo ── */}
+      <div className="relative h-48 shrink-0 overflow-hidden bg-card-hover">
+        {imgUrl
+          ? <img src={imgUrl} alt={drop.title}
+              className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-[1.04]" />
+          : <PhotoPlaceholder color={cat.color} />
+        }
+
+        {/* Gradient veil */}
+        <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/10 to-transparent" />
+
+        {/* Drop badge */}
+        <div className="absolute top-3 left-3 flex items-center gap-1.5">
+          <span className={`drop-badge ${isHot ? "animate-pulse" : ""}`}>
+            ↓ {pct.toFixed(1)}%
           </span>
-          {pct >= 15 && (
-            <span className="rounded-md bg-red/20 px-1.5 py-0.5 text-[10px] font-bold text-red border border-red/30">
+          {isHot && (
+            <span className="pill bg-red-dim text-red border border-red/25 text-[10px]">
               HOT
             </span>
           )}
         </div>
 
         {/* Category + save */}
-        <div className="absolute top-2.5 right-2.5 flex items-center gap-1.5">
-          <span
-            className="rounded-md px-2 py-0.5 text-xs font-semibold backdrop-blur-sm"
-            style={{ color: cat.color, background: cat.bg + "cc" }}
-          >
+        <div className="absolute top-3 right-3 flex items-center gap-1.5">
+          <span className="px-2 py-0.5 rounded-md text-[11px] font-semibold backdrop-blur-md"
+            style={{ color: cat.color, background: `${cat.color}22` }}>
             {cat.label}
           </span>
-          <button
-            onClick={toggle}
-            aria-label={saved ? "Odebrat ze sledovaných" : "Sledovat"}
+          <button onClick={toggle} aria-label={saved ? "Odebrat" : "Uložit"}
             className={`flex h-7 w-7 items-center justify-center rounded-full backdrop-blur-sm transition-all ${
-              saved ? "bg-red/80 text-white hover:bg-red" : "bg-black/50 text-white/60 hover:bg-black/70 hover:text-white"
-            }`}
-          >
-            <svg width="13" height="13" viewBox="0 0 24 24" fill={saved ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2">
+              saved ? "bg-red/80 text-white" : "bg-black/40 text-white/50 hover:bg-black/60 hover:text-white"
+            }`}>
+            <svg width="12" height="12" viewBox="0 0 24 24" fill={saved ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2.2">
               <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
             </svg>
           </button>
         </div>
 
-        {/* Bottom gradient */}
-        <div className="absolute inset-x-0 bottom-0 h-10 bg-gradient-to-t from-black/40 to-transparent" />
+        {/* Price over image */}
+        <div className="absolute bottom-0 inset-x-0 px-4 pb-3 pt-8">
+          <div className="flex items-end justify-between gap-2">
+            <div>
+              <div className="text-xl font-extrabold text-white tabular-nums leading-none">
+                {fmtPrice(drop.new_price)}
+              </div>
+              <div className="text-xs text-white/50 line-through mt-0.5 tabular-nums">
+                {fmtPrice(drop.old_price)}
+              </div>
+            </div>
+            {drop.area_m2 && (
+              <span className="rounded-lg bg-white/10 px-2 py-1 text-xs font-bold text-white/80 backdrop-blur-sm">
+                {drop.area_m2} m²
+              </span>
+            )}
+          </div>
+        </div>
       </div>
 
-      <div className="flex flex-col flex-1 p-4">
+      {/* ── Content ── */}
+      <div className="flex flex-col flex-1 p-4 gap-3">
         {/* Title */}
-        <a
-          href={`/listing/${drop.listing_id}`}
-          className="block text-sm font-semibold leading-snug text-foreground hover:text-accent-light transition-colors line-clamp-2 mb-2"
-        >
+        <a href={`/listing/${drop.listing_id}`}
+          className="text-[13px] font-semibold leading-snug text-foreground hover:text-accent-light transition-colors line-clamp-2">
           {drop.title || `Nemovitost ${drop.listing_id}`}
         </a>
 
-        {/* Location + area */}
-        <div className="flex flex-wrap items-center gap-2 text-xs text-muted mb-3">
+        {/* Meta row */}
+        <div className="flex items-center gap-3 text-[11px] text-muted">
           {drop.location && (
-            <span className="flex items-center gap-1">
-              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+            <span className="flex items-center gap-1 truncate min-w-0">
+              <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="shrink-0">
                 <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/>
               </svg>
-              <span className="truncate max-w-[140px]">{drop.location}</span>
+              <span className="truncate">{drop.location}</span>
             </span>
           )}
-          {drop.area_m2 && (
-            <span className="flex items-center gap-1">
-              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                <rect x="2" y="2" width="20" height="20" rx="2"/>
-              </svg>
-              {drop.area_m2} m²
-            </span>
-          )}
+          <span className="shrink-0 ml-auto">{timeAgo(drop.detected_at)}</span>
         </div>
 
-        {/* Price change */}
-        <div className="mt-auto">
-          <div className="flex items-end gap-2 mb-0.5">
-            <span className="text-xl font-bold text-green">{formatPrice(drop.new_price)}</span>
-            <span className="text-sm text-muted line-through pb-0.5">{formatPrice(drop.old_price)}</span>
-          </div>
-          <div className="flex items-center justify-between mb-3">
-            <span className="text-xs text-green/80 font-medium">Ušetříte {formatPrice(saved_amount)}</span>
-            <span className="text-xs text-muted">{timeAgo(drop.detected_at)}</span>
-          </div>
+        {/* Savings highlight */}
+        <div className="rounded-xl border border-green/15 bg-green-dim px-3 py-2 flex items-center justify-between">
+          <span className="text-[11px] text-muted">Úspora</span>
+          <span className="text-[13px] font-bold text-green tabular-nums">{fmtSaved(saved_amount)}</span>
+        </div>
 
-          <div className="flex items-center gap-1.5">
-            <a
-              href={`/listing/${drop.listing_id}`}
-              className="flex-1 rounded-lg bg-accent/10 px-2.5 py-1.5 text-center text-xs font-semibold text-accent-light transition-colors hover:bg-accent/20"
-            >
-              Zobrazit detail
+        {/* Actions */}
+        <div className="flex items-center gap-2 pt-1">
+          <a href={`/listing/${drop.listing_id}`}
+            className="flex-1 flex items-center justify-center gap-1.5 rounded-xl bg-accent/12 hover:bg-accent/20 px-3 py-2 text-[12px] font-semibold text-accent-light transition-colors">
+            Detail
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+              <polyline points="9 18 15 12 9 6"/>
+            </svg>
+          </a>
+          {srealityUrl && (
+            <a href={srealityUrl} target="_blank" rel="noopener noreferrer"
+              className="flex items-center gap-1 rounded-xl border border-border px-3 py-2 text-[11px] font-medium text-muted hover:text-foreground hover:border-border-light transition-colors">
+              ↗ Sreality
             </a>
-            {srealityUrl && (
-              <a
-                href={srealityUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="rounded-lg border border-border px-2.5 py-1.5 text-xs font-medium text-muted transition-colors hover:border-border/80 hover:text-foreground"
-              >
-                ↗ Sreality
-              </a>
-            )}
-          </div>
+          )}
         </div>
       </div>
     </div>

@@ -16,7 +16,7 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: "CenovýPád – Sledování cen nemovitostí",
-  description: "Monitorujeme cenové propady nemovitostí na českém trhu",
+  description: "Monitorujeme cenové propady nemovitostí na českém trhu v reálném čase.",
 };
 
 export default function RootLayout({
@@ -27,8 +27,14 @@ export default function RootLayout({
   return (
     <html lang="cs">
       <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
-        <Suspense fallback={null}><NavBar /></Suspense>
-        <main className="mx-auto max-w-7xl px-6 py-8">{children}</main>
+        <div className="relative z-10">
+          <Suspense fallback={null}>
+            <NavBar />
+          </Suspense>
+          <main className="mx-auto max-w-7xl px-5 py-8 md:px-8">
+            {children}
+          </main>
+        </div>
       </body>
     </html>
   );

@@ -5,6 +5,7 @@ export interface Listing {
   location: string;
   area_m2: number | null;
   category: string;
+  dispozice: string | null;
   price: number;
   first_seen_at: Date;
 }

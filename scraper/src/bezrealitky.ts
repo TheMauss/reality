@@ -34,6 +34,7 @@ export interface ParsedBRListing {
   location: string;
   area_m2: number | null;
   category: string;
+  dispozice: string | null;
   price: number;
   lat: number | null;
   lon: number | null;
@@ -146,6 +147,20 @@ async function fetchGQL(
   throw new Error(`Bezrealitky: failed after retries (${offerType} ${estateType.join(",")} offset=${offset})`);
 }
 
+function extractDispoziceBR(title: string | null, category: string): string | null {
+  if (!title) return null;
+  // pokoj / spolubydlení
+  if (/pokoj|spolubydl/i.test(title)) {
+    return /spolubydl/i.test(title) ? "spolecne bydleni" : "pokoj";
+  }
+  // byty/domy — disposition like 2+kk, 3+1 etc.
+  if (category.startsWith("byty") || category.startsWith("domy")) {
+    const match = title.match(/(\d\+(?:kk|\d))/i);
+    if (match) return match[1].toLowerCase();
+  }
+  return null;
+}
+
 function parseAdvert(advert: GQLAdvert, category: string): ParsedBRListing | null {
   const price = advert.price;
   if (!price || price <= 1) return null;
@@ -161,6 +176,7 @@ function parseAdvert(advert: GQLAdvert, category: string): ParsedBRListing | nul
     location,
     area_m2: advert.surface ?? null,
     category,
+    dispozice: extractDispoziceBR(title, category),
     price,
     lat: advert.gps?.lat ?? null,
     lon: advert.gps?.lng ?? null,

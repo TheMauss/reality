@@ -32,6 +32,7 @@ export interface ParsedListing {
   location: string;
   area_m2: number | null;
   category: string;
+  dispozice: string | null;
   price: number;
   lat: number | null;
   lon: number | null;
@@ -123,8 +124,21 @@ const DUM_SUB_SLUGS: Record<number, string> = {
 
 function extractDispositionFromName(name: string): string {
   const match = name.match(/(\d\+(?:kk|\d))/i);
-  if (match) return match[1];
+  if (match) return match[1].toLowerCase();
   return "atypicky";
+}
+
+function extractDispozice(categoryMain: number, categorySub: number, name: string): string | null {
+  if (categoryMain === 1) {
+    // byty — použij slug nebo extrahuj z názvu
+    return BYT_SUB_SLUGS[categorySub] || extractDispositionFromName(name);
+  }
+  if (categoryMain === 2) {
+    // domy — typ domu jako dispozice
+    return DUM_SUB_SLUGS[categorySub] || extractDispositionFromName(name);
+  }
+  // pozemky, komerční, ostatní — bez dispozice
+  return null;
 }
 
 function buildListingUrl(
@@ -267,6 +281,7 @@ function parseListing(
   districtId: number | null,
   fallbackLocality: string,
 ): ParsedListing {
+  const categorySub = estate.seo?.category_sub_cb || 0;
   return {
     id: estate.hash_id.toString(),
     title: estate.name,
@@ -275,12 +290,13 @@ function parseListing(
       config.type,
       config.main,
       estate.seo?.locality || "",
-      estate.seo?.category_sub_cb || 0,
+      categorySub,
       estate.name
     ),
     location: estate.locality || estate.seo?.locality || fallbackLocality,
     area_m2: extractArea(estate),
     category: config.label,
+    dispozice: extractDispozice(config.main, categorySub, estate.name),
     price: estate.price,
     lat: estate.gps?.lat ?? null,
     lon: estate.gps?.lon ?? null,

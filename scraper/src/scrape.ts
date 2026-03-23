@@ -20,6 +20,7 @@ export async function runScrape() {
       location TEXT,
       area_m2 REAL,
       category TEXT,
+      dispozice TEXT,
       price INTEGER NOT NULL,
       first_seen_at TEXT NOT NULL,
       last_seen_at TEXT,
@@ -90,6 +91,7 @@ export async function runScrape() {
   addColumn("removed_at", "TEXT");
   addColumn("description", "TEXT");
   addColumn("image_url", "TEXT");
+  addColumn("dispozice", "TEXT");
 
   try { db.exec("CREATE INDEX IF NOT EXISTS idx_listings_region ON listings(region_id)"); } catch { /* */ }
   try { db.exec("CREATE INDEX IF NOT EXISTS idx_listings_district ON listings(district_id)"); } catch { /* */ }
@@ -127,10 +129,10 @@ export async function runScrape() {
 
   const findListing = db.prepare("SELECT price, title, url, location, area_m2, removed_at FROM listings WHERE id = ?");
   const insertListing = db.prepare(
-    "INSERT INTO listings (id, title, url, location, area_m2, category, price, first_seen_at, last_seen_at, lat, lon, region_id, district_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+    "INSERT INTO listings (id, title, url, location, area_m2, category, dispozice, price, first_seen_at, last_seen_at, lat, lon, region_id, district_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
   );
   const updateListing = db.prepare(
-    "UPDATE listings SET title = ?, url = ?, location = ?, area_m2 = ?, price = ?, last_seen_at = ?, removed_at = NULL, lat = ?, lon = ?, region_id = ?, district_id = ? WHERE id = ?"
+    "UPDATE listings SET title = ?, url = ?, location = ?, area_m2 = ?, dispozice = ?, price = ?, last_seen_at = ?, removed_at = NULL, lat = ?, lon = ?, region_id = ?, district_id = ? WHERE id = ?"
   );
   const insertHistory = db.prepare(
     "INSERT INTO price_history (listing_id, price, recorded_at) VALUES (?, ?, ?)"
@@ -165,7 +167,7 @@ export async function runScrape() {
       const existing = findListing.get(item.id) as ExistingListing | undefined;
 
       if (!existing) {
-        insertListing.run(item.id, item.title, item.url, item.location, item.area_m2, item.category, item.price, now, now, item.lat, item.lon, item.region_id, item.district_id);
+        insertListing.run(item.id, item.title, item.url, item.location, item.area_m2, item.category, item.dispozice, item.price, now, now, item.lat, item.lon, item.region_id, item.district_id);
         upsertSource.run(item.id, item.id, item.url, now, now);
         newCount++;
       } else {
@@ -187,7 +189,7 @@ export async function runScrape() {
           changeCount++;
         }
 
-        updateListing.run(item.title, item.url, item.location, item.area_m2, item.price, now, item.lat, item.lon, item.region_id, item.district_id, item.id);
+        updateListing.run(item.title, item.url, item.location, item.area_m2, item.dispozice, item.price, now, item.lat, item.lon, item.region_id, item.district_id, item.id);
         upsertSource.run(item.id, item.id, item.url, now, now);
         updatedCount++;
       }
@@ -248,10 +250,10 @@ export async function runFastScan() {
     "SELECT price, removed_at FROM listings WHERE id = ?"
   );
   const insertListing = db.prepare(
-    "INSERT INTO listings (id, title, url, location, area_m2, category, price, first_seen_at, last_seen_at, lat, lon, region_id, district_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+    "INSERT INTO listings (id, title, url, location, area_m2, category, dispozice, price, first_seen_at, last_seen_at, lat, lon, region_id, district_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
   );
   const updateListing = db.prepare(
-    "UPDATE listings SET title = ?, url = ?, location = ?, area_m2 = ?, price = ?, last_seen_at = ?, removed_at = NULL, lat = ?, lon = ?, region_id = ?, district_id = ? WHERE id = ?"
+    "UPDATE listings SET title = ?, url = ?, location = ?, area_m2 = ?, dispozice = ?, price = ?, last_seen_at = ?, removed_at = NULL, lat = ?, lon = ?, region_id = ?, district_id = ? WHERE id = ?"
   );
   const insertHistory = db.prepare(
     "INSERT INTO price_history (listing_id, price, recorded_at) VALUES (?, ?, ?)"
@@ -277,7 +279,7 @@ export async function runFastScan() {
       if (!existing) {
         insertListing.run(
           item.id, item.title, item.url, item.location, item.area_m2,
-          item.category, item.price, now, now,
+          item.category, item.dispozice, item.price, now, now,
           item.lat, item.lon, item.region_id, item.district_id
         );
         upsertSource.run(item.id, item.id, item.url, now, now);
@@ -288,7 +290,7 @@ export async function runFastScan() {
 
         updateListing.run(
           item.title, item.url, item.location, item.area_m2,
-          item.price, now, item.lat, item.lon, item.region_id, item.district_id,
+          item.dispozice, item.price, now, item.lat, item.lon, item.region_id, item.district_id,
           item.id
         );
         upsertSource.run(item.id, item.id, item.url, now, now);
@@ -391,7 +393,7 @@ export async function runBezrealitkyScan(mode: "fast" | "full"): Promise<void> {
     "INSERT OR IGNORE INTO listing_sources (listing_id, source, source_id, url, first_seen_at, last_seen_at, removed_at) VALUES (?, 'bezrealitky', ?, ?, ?, ?, NULL)"
   );
   const insertNewListing = db.prepare(
-    "INSERT INTO listings (id, title, url, location, area_m2, category, price, first_seen_at, last_seen_at, lat, lon, region_id, district_id, description, image_url) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+    "INSERT INTO listings (id, title, url, location, area_m2, category, dispozice, price, first_seen_at, last_seen_at, lat, lon, region_id, district_id, description, image_url) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
   );
   const fillMissingData = db.prepare(
     "UPDATE listings SET description = ?, image_url = ? WHERE id = ? AND description IS NULL AND image_url IS NULL"
@@ -431,7 +433,7 @@ export async function runBezrealitkyScan(mode: "fast" | "full"): Promise<void> {
         try {
           insertNewListing.run(
             newId, item.title, item.url, item.location, item.area_m2,
-            item.category, item.price, now, now,
+            item.category, item.dispozice, item.price, now, now,
             item.lat, item.lon, item.region_id, null,
             item.description, item.image_url,
           );
