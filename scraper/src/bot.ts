@@ -37,11 +37,43 @@ export function startBot(): void {
     bot.sendMessage(chatId,
       `Vítejte v CenovýPád botu!\n\n` +
       `Vaše Chat ID: \`${chatId}\`\n\n` +
-      `Zkopírujte toto číslo do nastavení na webu (Hlídací pes → Telegram Chat ID) pro zapnutí notifikací.\n\n` +
-      `/status – počty inzerátů\n` +
-      `/watchdog list – seznam hlídacích psů`,
+      `Zkopírujte toto číslo do nastavení na webu *(Hlídací pes → Telegram Chat ID)* pro zapnutí notifikací.\n\n` +
+      `*Příkazy:*\n` +
+      `/hlidaci – seznam vašich hlídacích psů\n` +
+      `/status – počty inzerátů`,
       { parse_mode: "Markdown" }
     );
+  });
+
+  async function sendWatchdogList(chatId: number) {
+    const user = await getUserByTelegramId(chatId);
+    if (!user) {
+      bot.sendMessage(chatId,
+        `Váš účet není propojen s Telegramem.\n\n` +
+        `1. Přihlaste se na webu přes Google\n` +
+        `2. Jděte na stránku *Hlídací pes*\n` +
+        `3. Zadejte vaše Chat ID: \`${chatId}\``,
+        { parse_mode: "Markdown" }
+      );
+      return;
+    }
+
+    const watchdogs = (await client.execute({ sql: "SELECT id, name, active, category, location FROM watchdogs WHERE user_id = ? ORDER BY created_at DESC", args: [user.id] })).rows as unknown as { id: number; name: string; active: number; category: string | null; location: string | null }[];
+    if (watchdogs.length === 0) {
+      bot.sendMessage(chatId, "Nemáte žádné hlídací psy. Vytvořte je na webu v sekci *Hlídací pes*.", { parse_mode: "Markdown" });
+      return;
+    }
+
+    const lines = watchdogs.map(w => {
+      const status = w.active ? "✅" : "⏸";
+      const filters = [w.category, w.location].filter(Boolean).join(", ");
+      return `${status} #${w.id} *${w.name}*${filters ? ` (${filters})` : ""}`;
+    });
+    bot.sendMessage(chatId, `🐕 Vaši hlídací psi:\n\n${lines.join("\n")}`, { parse_mode: "Markdown" });
+  }
+
+  bot.onText(/\/hlidaci/, async (msg) => {
+    await sendWatchdogList(msg.chat.id);
   });
 
   bot.onText(/\/status/, async (msg) => {
@@ -57,19 +89,7 @@ export function startBot(): void {
   }
 
   bot.onText(/\/watchdog list/, async (msg) => {
-    const chatId = msg.chat.id;
-    const user = await getUserByTelegramId(chatId);
-    if (!user) { bot.sendMessage(chatId, "Nejste přihlášeni. Použijte /subscribe vas@email.cz"); return; }
-
-    const watchdogs = (await client.execute({ sql: "SELECT id, name, active, category, location FROM watchdogs WHERE user_id = ? ORDER BY created_at DESC", args: [user.id] })).rows as unknown as { id: number; name: string; active: number; category: string | null; location: string | null }[];
-    if (watchdogs.length === 0) { bot.sendMessage(chatId, "Nemáte žádné hlídací psy.\nVytvořte: /watchdog add <název>"); return; }
-
-    const lines = watchdogs.map(w => {
-      const status = w.active ? "✅" : "⏸";
-      const filters = [w.category, w.location].filter(Boolean).join(", ");
-      return `${status} #${w.id} *${w.name}*${filters ? ` (${filters})` : ""}`;
-    });
-    bot.sendMessage(chatId, `🐕 Vaši hlídací psi:\n\n${lines.join("\n")}`, { parse_mode: "Markdown" });
+    await sendWatchdogList(msg.chat.id);
   });
 
   bot.onText(/\/watchdog add (.+)/, async (msg, match) => {
@@ -77,7 +97,7 @@ export function startBot(): void {
     const name = match?.[1]?.trim();
     if (!name) { bot.sendMessage(chatId, "Použití: /watchdog add <název>"); return; }
     const user = await getUserByTelegramId(chatId);
-    if (!user) { bot.sendMessage(chatId, "Nejste přihlášeni. Použijte /subscribe vas@email.cz"); return; }
+    if (!user) { bot.sendMessage(chatId, "Propojte účet na webu: Hlídací pes → Telegram Chat ID"); return; }
 
     const result = await client.execute({ sql: "INSERT INTO watchdogs (user_id, name, notify_telegram, notify_email) VALUES (?, ?, 1, 1)", args: [user.id, name] });
     bot.sendMessage(chatId, `✅ Hlídací pes *${name}* vytvořen (ID #${result.lastInsertRowid}).\n\nUpravte filtry na webu: /watchdog`, { parse_mode: "Markdown" });
@@ -87,7 +107,7 @@ export function startBot(): void {
     const chatId = msg.chat.id;
     const wdId = parseInt(match?.[1] || "0", 10);
     const user = await getUserByTelegramId(chatId);
-    if (!user) { bot.sendMessage(chatId, "Nejste přihlášeni."); return; }
+    if (!user) { bot.sendMessage(chatId, "Propojte účet na webu: Hlídací pes → Telegram Chat ID"); return; }
     const result = await client.execute({ sql: "UPDATE watchdogs SET active = 0, updated_at = datetime('now') WHERE id = ? AND user_id = ?", args: [wdId, user.id] });
     bot.sendMessage(chatId, result.rowsAffected === 0 ? "Hlídací pes nenalezen." : `⏸ Hlídací pes #${wdId} pozastaven.`);
   });
@@ -96,7 +116,7 @@ export function startBot(): void {
     const chatId = msg.chat.id;
     const wdId = parseInt(match?.[1] || "0", 10);
     const user = await getUserByTelegramId(chatId);
-    if (!user) { bot.sendMessage(chatId, "Nejste přihlášeni."); return; }
+    if (!user) { bot.sendMessage(chatId, "Propojte účet na webu: Hlídací pes → Telegram Chat ID"); return; }
     const result = await client.execute({ sql: "UPDATE watchdogs SET active = 1, updated_at = datetime('now') WHERE id = ? AND user_id = ?", args: [wdId, user.id] });
     bot.sendMessage(chatId, result.rowsAffected === 0 ? "Hlídací pes nenalezen." : `✅ Hlídací pes #${wdId} aktivován.`);
   });
@@ -105,7 +125,7 @@ export function startBot(): void {
     const chatId = msg.chat.id;
     const wdId = parseInt(match?.[1] || "0", 10);
     const user = await getUserByTelegramId(chatId);
-    if (!user) { bot.sendMessage(chatId, "Nejste přihlášeni."); return; }
+    if (!user) { bot.sendMessage(chatId, "Propojte účet na webu: Hlídací pes → Telegram Chat ID"); return; }
     await client.execute({ sql: "DELETE FROM watchdog_matches WHERE watchdog_id = ? AND watchdog_id IN (SELECT id FROM watchdogs WHERE user_id = ?)", args: [wdId, user.id] });
     const result = await client.execute({ sql: "DELETE FROM watchdogs WHERE id = ? AND user_id = ?", args: [wdId, user.id] });
     bot.sendMessage(chatId, result.rowsAffected === 0 ? "Hlídací pes nenalezen." : `🗑 Hlídací pes #${wdId} smazán.`);
