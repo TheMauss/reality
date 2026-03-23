@@ -67,6 +67,9 @@ interface WatchdogForm {
   price_max: string;
   area_min: string;
   area_max: string;
+  price_m2_min: string;
+  price_m2_max: string;
+  layout: string[];
   keywords: string;
   watch_new: boolean;
   watch_drops: boolean;
@@ -74,10 +77,11 @@ interface WatchdogForm {
   watch_underpriced: boolean;
   watch_underpriced_pct: string;
   watch_returned: boolean;
-  notify_email: boolean;
   notify_telegram: boolean;
   notify_frequency: string;
 }
+
+const LAYOUTS = ["garsonka", "1+kk", "1+1", "2+kk", "2+1", "3+kk", "3+1", "4+kk", "4+1", "5+kk"];
 
 const EMPTY_FORM: WatchdogForm = {
   name: "",
@@ -91,6 +95,9 @@ const EMPTY_FORM: WatchdogForm = {
   price_max: "",
   area_min: "",
   area_max: "",
+  price_m2_min: "",
+  price_m2_max: "",
+  layout: [],
   keywords: "",
   watch_new: true,
   watch_drops: false,
@@ -98,7 +105,6 @@ const EMPTY_FORM: WatchdogForm = {
   watch_underpriced: false,
   watch_underpriced_pct: "15",
   watch_returned: false,
-  notify_email: true,
   notify_telegram: false,
   notify_frequency: "instant",
 };
@@ -268,6 +274,9 @@ export default function WatchdogClient() {
   const [matchesTotal, setMatchesTotal] = useState(0);
   const [matchesPage, setMatchesPage] = useState(1);
   const [matchesLoading, setMatchesLoading] = useState(false);
+  const [preview, setPreview] = useState<{ count: number; samples: Array<{ id: string; title: string; price: number; location: string }> } | null>(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const previewTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [telegramId, setTelegramId] = useState("");
   const [telegramSavedId, setTelegramSavedId] = useState(""); // the value actually in DB
   const [telegramEditing, setTelegramEditing] = useState(false);
@@ -335,6 +344,35 @@ export default function WatchdogClient() {
     finally { setMatchesLoading(false); }
   }, []);
 
+  function triggerPreview(f: WatchdogForm) {
+    if (previewTimer.current) clearTimeout(previewTimer.current);
+    previewTimer.current = setTimeout(async () => {
+      setPreviewLoading(true);
+      try {
+        const res = await fetch("/api/watchdogs/preview", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            category: f.category || null,
+            district_id: f.district_id,
+            region_id: f.region_id,
+            location: f.location || null,
+            price_min: f.price_min ? parseInt(f.price_min) : null,
+            price_max: f.price_max ? parseInt(f.price_max) : null,
+            area_min: f.area_min ? parseFloat(f.area_min) : null,
+            area_max: f.area_max ? parseFloat(f.area_max) : null,
+            price_m2_min: f.price_m2_min ? parseInt(f.price_m2_min) : null,
+            price_m2_max: f.price_m2_max ? parseInt(f.price_m2_max) : null,
+            layout: f.layout,
+            keywords: f.keywords ? f.keywords.split(",").map(s => s.trim()).filter(Boolean) : null,
+          }),
+        });
+        setPreview(await res.json());
+      } catch { /* ignore */ }
+      finally { setPreviewLoading(false); }
+    }, 500);
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     const body = {
@@ -347,6 +385,9 @@ export default function WatchdogClient() {
       price_max: form.price_max ? parseInt(form.price_max) : null,
       area_min: form.area_min ? parseFloat(form.area_min) : null,
       area_max: form.area_max ? parseFloat(form.area_max) : null,
+      price_m2_min: form.price_m2_min ? parseInt(form.price_m2_min) : null,
+      price_m2_max: form.price_m2_max ? parseInt(form.price_m2_max) : null,
+      layout: form.layout.length ? form.layout : null,
       keywords: form.keywords ? form.keywords.split(",").map(s => s.trim()).filter(Boolean) : null,
       watch_new: form.watch_new ? 1 : 0,
       watch_drops: form.watch_drops ? 1 : 0,
@@ -354,7 +395,6 @@ export default function WatchdogClient() {
       watch_underpriced: form.watch_underpriced ? 1 : 0,
       watch_underpriced_pct: parseFloat(form.watch_underpriced_pct) || 15,
       watch_returned: form.watch_returned ? 1 : 0,
-      notify_email: form.notify_email ? 1 : 0,
       notify_telegram: form.notify_telegram ? 1 : 0,
       notify_frequency: form.notify_frequency,
     };
@@ -363,6 +403,7 @@ export default function WatchdogClient() {
     setShowForm(false);
     setEditId(null);
     setForm(EMPTY_FORM);
+    setPreview(null);
     fetchWatchdogs();
   }
 
@@ -378,8 +419,9 @@ export default function WatchdogClient() {
     fetchWatchdogs();
   }
 
-  function handleEdit(wd: Watchdog) {
-    const kw = wd.keywords ? JSON.parse(wd.keywords) : [];
+  function handleEdit(wd: Watchdog & { layout?: string | null; price_m2_min?: number | null; price_m2_max?: number | null }) {
+    const kw = wd.keywords ? (() => { try { return JSON.parse(wd.keywords!); } catch { return []; } })() : [];
+    const ly = wd.layout ? (() => { try { return JSON.parse(wd.layout!); } catch { return []; } })() : [];
     setForm({
       name: wd.name,
       category: wd.category || "",
@@ -392,6 +434,9 @@ export default function WatchdogClient() {
       price_max: wd.price_max?.toString() || "",
       area_min: wd.area_min?.toString() || "",
       area_max: wd.area_max?.toString() || "",
+      price_m2_min: wd.price_m2_min?.toString() || "",
+      price_m2_max: wd.price_m2_max?.toString() || "",
+      layout: Array.isArray(ly) ? ly : [],
       keywords: Array.isArray(kw) ? kw.join(", ") : "",
       watch_new: !!wd.watch_new,
       watch_drops: !!wd.watch_drops,
@@ -399,7 +444,6 @@ export default function WatchdogClient() {
       watch_underpriced: !!wd.watch_underpriced,
       watch_underpriced_pct: wd.watch_underpriced_pct?.toString() || "15",
       watch_returned: !!wd.watch_returned,
-      notify_email: !!wd.notify_email,
       notify_telegram: !!wd.notify_telegram,
       notify_frequency: wd.notify_frequency || "instant",
     });
@@ -534,8 +578,20 @@ export default function WatchdogClient() {
         <form onSubmit={handleSubmit} className="rounded-2xl border border-border bg-card overflow-hidden">
           {/* Form header */}
           <div className="flex items-center justify-between px-6 py-4 border-b border-border">
-            <h2 className="text-base font-semibold">{editId ? "Upravit hlídacího psa" : "Nový hlídací pes"}</h2>
-            <button type="button" onClick={() => { setShowForm(false); setEditId(null); }}
+            <div className="flex items-center gap-3">
+              <h2 className="text-base font-semibold">{editId ? "Upravit hlídacího psa" : "Nový hlídací pes"}</h2>
+              {previewLoading && (
+                <span className="text-xs text-muted animate-pulse">Počítám…</span>
+              )}
+              {!previewLoading && preview !== null && (
+                <span className={`text-xs font-medium px-2.5 py-1 rounded-full ${
+                  preview.count > 0 ? "bg-accent/10 text-accent-light" : "bg-border text-muted"
+                }`}>
+                  {preview.count > 0 ? `${preview.count > 199 ? "200+" : preview.count} inzerátů nyní` : "0 shod"}
+                </span>
+              )}
+            </div>
+            <button type="button" onClick={() => { setShowForm(false); setEditId(null); setPreview(null); }}
               className="flex h-7 w-7 items-center justify-center rounded-lg text-muted hover:text-foreground hover:bg-card-hover transition-colors">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                 <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
@@ -559,7 +615,7 @@ export default function WatchdogClient() {
               <label className="text-xs font-semibold text-muted uppercase tracking-wider">Filtry</label>
               <div className="mt-1.5 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                 <div>
-                  <select value={form.category} onChange={e => setForm({ ...form, category: e.target.value })}
+                  <select value={form.category} onChange={e => { const f = { ...form, category: e.target.value }; setForm(f); triggerPreview(f); }}
                     className="w-full rounded-xl border border-border bg-background px-3.5 py-2.5 text-sm outline-none focus:border-accent transition-colors">
                     {CATEGORIES.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
                   </select>
@@ -578,26 +634,75 @@ export default function WatchdogClient() {
                   )}
                 </div>
 
-                <input type="number" value={form.price_min} onChange={e => setForm({ ...form, price_min: e.target.value })}
+                <input type="number" value={form.price_min} onChange={e => { const f = { ...form, price_min: e.target.value }; setForm(f); triggerPreview(f); }}
                   placeholder="Cena od (Kč)"
                   className="rounded-xl border border-border bg-background px-3.5 py-2.5 text-sm outline-none focus:border-accent transition-colors" />
-                <input type="number" value={form.price_max} onChange={e => setForm({ ...form, price_max: e.target.value })}
+                <input type="number" value={form.price_max} onChange={e => { const f = { ...form, price_max: e.target.value }; setForm(f); triggerPreview(f); }}
                   placeholder="Cena do (Kč)"
                   className="rounded-xl border border-border bg-background px-3.5 py-2.5 text-sm outline-none focus:border-accent transition-colors" />
 
                 <div className="flex gap-2">
-                  <input type="number" value={form.area_min} onChange={e => setForm({ ...form, area_min: e.target.value })}
+                  <input type="number" value={form.area_min} onChange={e => { const f = { ...form, area_min: e.target.value }; setForm(f); triggerPreview(f); }}
                     placeholder="m² od"
                     className="w-full rounded-xl border border-border bg-background px-3.5 py-2.5 text-sm outline-none focus:border-accent transition-colors" />
-                  <input type="number" value={form.area_max} onChange={e => setForm({ ...form, area_max: e.target.value })}
+                  <input type="number" value={form.area_max} onChange={e => { const f = { ...form, area_max: e.target.value }; setForm(f); triggerPreview(f); }}
                     placeholder="m² do"
                     className="w-full rounded-xl border border-border bg-background px-3.5 py-2.5 text-sm outline-none focus:border-accent transition-colors" />
                 </div>
 
-                <input type="text" value={form.keywords} onChange={e => setForm({ ...form, keywords: e.target.value })}
+                <input type="text" value={form.keywords} onChange={e => { const f = { ...form, keywords: e.target.value }; setForm(f); triggerPreview(f); }}
                   placeholder="Klíčová slova: balkon, garáž…"
                   className="sm:col-span-2 rounded-xl border border-border bg-background px-3.5 py-2.5 text-sm outline-none focus:border-accent transition-colors" />
+
+                <div className="sm:col-span-2 lg:col-span-3 flex gap-2">
+                  <input type="number" value={form.price_m2_min} onChange={e => { const f = { ...form, price_m2_min: e.target.value }; setForm(f); triggerPreview(f); }}
+                    placeholder="Kč/m² od"
+                    className="flex-1 rounded-xl border border-border bg-background px-3.5 py-2.5 text-sm outline-none focus:border-accent transition-colors" />
+                  <input type="number" value={form.price_m2_max} onChange={e => { const f = { ...form, price_m2_max: e.target.value }; setForm(f); triggerPreview(f); }}
+                    placeholder="Kč/m² do"
+                    className="flex-1 rounded-xl border border-border bg-background px-3.5 py-2.5 text-sm outline-none focus:border-accent transition-colors" />
+                </div>
               </div>
+
+              <div className="mt-3">
+                <label className="text-xs text-muted mb-2 block">Dispozice <span className="text-muted/50">(prázdné = vše)</span></label>
+                <div className="flex flex-wrap gap-1.5">
+                  {LAYOUTS.map(l => {
+                    const active = form.layout.includes(l);
+                    return (
+                      <button key={l} type="button"
+                        onClick={() => {
+                          const layout = active ? form.layout.filter(x => x !== l) : [...form.layout, l];
+                          const f = { ...form, layout };
+                          setForm(f);
+                          triggerPreview(f);
+                        }}
+                        className={`rounded-lg border px-2.5 py-1 text-xs font-medium transition-all ${
+                          active ? "border-accent/40 bg-accent/10 text-accent-light" : "border-border text-muted hover:text-foreground"
+                        }`}>
+                        {l}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Preview samples */}
+              {preview && preview.samples.length > 0 && (
+                <div className="mt-3 rounded-xl border border-border/60 bg-background overflow-hidden">
+                  <div className="px-3 py-2 border-b border-border/40 text-[10px] font-semibold uppercase tracking-wider text-muted">
+                    Ukázka shod
+                  </div>
+                  {preview.samples.map(s => (
+                    <div key={s.id} className="flex items-center justify-between px-3 py-2 border-b border-border/30 last:border-0">
+                      <span className="text-xs text-foreground truncate flex-1 pr-3">{s.title}</span>
+                      <span className="text-xs font-bold text-accent-light shrink-0 tabular-nums">
+                        {s.price >= 1_000_000 ? `${(s.price / 1_000_000).toFixed(1)} M` : `${Math.round(s.price / 1000)}k`} Kč
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
 
             {/* Watch types */}
@@ -690,16 +795,6 @@ export default function WatchdogClient() {
             <div>
               <label className="text-xs font-semibold text-muted uppercase tracking-wider">Notifikace</label>
               <div className="mt-1.5 flex flex-wrap items-center gap-2">
-                <button type="button" onClick={() => setForm(f => ({ ...f, notify_email: !f.notify_email }))}
-                  className={`flex items-center gap-2 rounded-xl border px-3.5 py-2 text-sm font-medium transition-all ${
-                    form.notify_email ? "border-accent/40 bg-accent/10 text-accent-light" : "border-border text-muted hover:text-foreground"
-                  }`}>
-                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/>
-                    <polyline points="22,6 12,13 2,6"/>
-                  </svg>
-                  Email
-                </button>
                 <button type="button" onClick={() => setForm(f => ({ ...f, notify_telegram: !f.notify_telegram }))}
                   className={`flex items-center gap-2 rounded-xl border px-3.5 py-2 text-sm font-medium transition-all ${
                     form.notify_telegram ? "border-blue-400/40 bg-blue-400/10 text-blue-300" : "border-border text-muted hover:text-foreground"

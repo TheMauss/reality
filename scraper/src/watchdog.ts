@@ -13,6 +13,9 @@ interface Watchdog {
   price_max: number | null;
   area_min: number | null;
   area_max: number | null;
+  price_m2_min: number | null;
+  price_m2_max: number | null;
+  layout: string | null;
   keywords: string | null;
   watch_new: number;
   watch_drops: number;
@@ -196,6 +199,22 @@ function matchesFilter(listing: ParsedListing, wd: Watchdog): boolean {
   if (wd.price_max && listing.price > wd.price_max) return false;
   if (wd.area_min && (listing.area_m2 === null || listing.area_m2 < wd.area_min)) return false;
   if (wd.area_max && (listing.area_m2 === null || listing.area_m2 > wd.area_max)) return false;
+
+  if (wd.layout) {
+    try {
+      const layouts = JSON.parse(wd.layout) as string[];
+      if (layouts.length > 0) {
+        if (!layouts.some((l) => listing.title.toLowerCase().includes(l.toLowerCase()))) return false;
+      }
+    } catch { /* */ }
+  }
+
+  if (wd.price_m2_min || wd.price_m2_max) {
+    if (!listing.area_m2 || listing.area_m2 <= 0) return false;
+    const priceM2 = listing.price / listing.area_m2;
+    if (wd.price_m2_min && priceM2 < wd.price_m2_min) return false;
+    if (wd.price_m2_max && priceM2 > wd.price_m2_max) return false;
+  }
 
   if (wd.keywords) {
     try {
