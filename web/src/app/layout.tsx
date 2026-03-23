@@ -17,8 +17,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "CenovýPád – Sledování cen nemovitostí",
-  description: "Monitorujeme cenové propady nemovitostí na českém trhu v reálném čase.",
+  title: "Bytolov – Agregátor nemovitostí a hlídací pes",
+  description: "Agregátor inzerátů z Sreality a Bezrealitky. Hlídejte ceny, sledujte propady a lovte nejlepší nabídky.",
 };
 
 export default function RootLayout({

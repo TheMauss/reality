@@ -7,7 +7,7 @@ import { startBot } from "./bot";
 
 const FULL_SCAN_INTERVAL = parseInt(process.env.SCRAPE_INTERVAL_MINUTES || "120", 10);
 
-console.log(`CenovýPád Scraper starting...`);
+console.log(`Bytolov Scraper starting...`);
 startBot();
 console.log(`Fast scan:  every 1 minute (new listings + price changes)`);
 console.log(`Full scan:  every ${FULL_SCAN_INTERVAL} minutes (delistings + full price sweep)`);

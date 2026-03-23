@@ -117,7 +117,7 @@ export async function GET(req: NextRequest) {
 
     const res = await fetch(url.toString(), {
       headers: {
-        "User-Agent": "CenovyPad/1.0 (https://cenovypad.cz)",
+        "User-Agent": "Bytolov/1.0 (https://bytolov.cz)",
         "Accept-Language": "cs,en",
       },
       next: { revalidate: 3600 },

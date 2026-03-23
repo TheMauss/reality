@@ -58,7 +58,7 @@ bot.onText(/\/unsubscribe/, async (msg) => {
 bot.onText(/\/start/, (msg) => {
   bot.sendMessage(
     msg.chat.id,
-    "Vítejte v CenovýPád botu!\n\n" +
+    "Vítejte v Bytolov botu!\n\n" +
       "/subscribe vas@email.cz – přihlásit se k upozorněním\n" +
       "/unsubscribe – odhlásit se\n" +
       "/status – stav\n" +
@@ -140,7 +140,7 @@ bot.onText(/\/watchdog add (.+)/, async (msg, match) => {
 
   bot.sendMessage(
     chatId,
-    `✅ Hlídací pes *${name}* vytvořen (ID #${result.lastInsertRowid}).\n\nSleduje nové byty-prodej s instant notifikacemi.\nUpravte na webu: /watchdog nebo cenovypad.cz/watchdog`,
+    `✅ Hlídací pes *${name}* vytvořen (ID #${result.lastInsertRowid}).\n\nSleduje nové byty-prodej s instant notifikacemi.\nUpravte na webu: /watchdog nebo bytolov.cz/watchdog`,
     { parse_mode: "Markdown" }
   );
 });

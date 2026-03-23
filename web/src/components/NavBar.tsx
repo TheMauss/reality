@@ -56,8 +56,8 @@ function Logo() {
         <IcoTrendDown />
       </div>
       <span className="hidden sm:flex items-baseline gap-px text-[15px] font-bold tracking-tight">
-        <span className="bg-gradient-to-r from-accent-light to-purple-400 bg-clip-text text-transparent">Cenový</span>
-        <span className="text-foreground">Pád</span>
+        <span className="bg-gradient-to-r from-accent-light to-purple-400 bg-clip-text text-transparent">Byto</span>
+        <span className="text-foreground">lov</span>
       </span>
     </Link>
   );

@@ -195,7 +195,7 @@ async function sendWatchdogEmail(to: string, watchdogName: string, matches: Matc
     .join("");
 
   await resend.emails.send({
-    from: "CenovýPád <alerts@cenovypad.cz>",
+    from: "Bytolov <alerts@bytolov.cz>",
     to,
     subject: `Hlídací pes: ${watchdogName} — ${matches.length} nových`,
     html: `
