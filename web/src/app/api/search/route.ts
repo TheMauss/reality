@@ -65,14 +65,16 @@ export async function GET(req: NextRequest) {
   try {
     const wards = await db
       .prepare(
-        `SELECT MIN(w.id) as id, w.name, d.name as district_name,
-          COALESCE(
-            (SELECT avg_price_m2 FROM sold_price_history
-             WHERE entity_type = 'ward' AND entity_id = MIN(w.id) AND category = 'byty'
-             ORDER BY year * 100 + month DESC LIMIT 1),
-            AVG(w.avg_price_m2)
-          ) as avg_price_m2
-        FROM sold_wards w JOIN sold_districts d ON d.id = w.district_id
+        `SELECT w.id, w.name, d.name as district_name,
+          COALESCE(h.avg_price_m2, w.avg_price_m2) as avg_price_m2
+        FROM sold_wards w
+        JOIN sold_districts d ON d.id = w.district_id
+        LEFT JOIN (
+          SELECT entity_id, avg_price_m2 FROM sold_price_history
+          WHERE entity_type = 'ward' AND category = 'byty'
+          GROUP BY entity_id
+          HAVING (year * 100 + month) = MAX(year * 100 + month)
+        ) h ON h.entity_id = w.id
         WHERE w.name LIKE ?
         GROUP BY w.name, w.district_id
         LIMIT 10`
