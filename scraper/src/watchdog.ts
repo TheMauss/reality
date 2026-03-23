@@ -213,17 +213,38 @@ function matchesFilter(listing: ParsedListing, wd: Watchdog): boolean {
 }
 
 async function getLocalAvgPriceM2(client: Client, listing: ParsedListing): Promise<number | null> {
+  // 1. Try ward — match first part of location string against sold_wards.name within district
+  if (listing.district_id && listing.location) {
+    const wardName = listing.location.split(",")[0].trim();
+    const row = (await client.execute({
+      sql: `SELECT h.avg_price_m2
+            FROM sold_price_history h
+            JOIN sold_wards w ON w.id = h.entity_id
+            WHERE h.entity_type = 'ward' AND h.category = 'byty'
+              AND w.district_id = ? AND w.name = ?
+            ORDER BY h.year * 100 + h.month DESC LIMIT 1`,
+      args: [listing.district_id, wardName],
+    })).rows[0];
+    if (row?.avg_price_m2) return row.avg_price_m2 as number;
+  }
+
+  // 2. Try district
   if (listing.district_id) {
     const row = (await client.execute({
-      sql: "SELECT avg_price_m2 FROM sold_districts WHERE id = ? AND avg_price_m2 IS NOT NULL",
+      sql: `SELECT avg_price_m2 FROM sold_price_history
+            WHERE entity_type = 'district' AND entity_id = ? AND category = 'byty'
+            ORDER BY year * 100 + month DESC LIMIT 1`,
       args: [listing.district_id],
     })).rows[0];
     if (row?.avg_price_m2) return row.avg_price_m2 as number;
   }
 
+  // 3. Try region
   if (listing.region_id) {
     const row = (await client.execute({
-      sql: "SELECT avg_price_m2 FROM sold_regions WHERE id = ? AND avg_price_m2 IS NOT NULL",
+      sql: `SELECT avg_price_m2 FROM sold_price_history
+            WHERE entity_type = 'region' AND entity_id = ? AND category = 'byty'
+            ORDER BY year * 100 + month DESC LIMIT 1`,
       args: [listing.region_id],
     })).rows[0];
     if (row?.avg_price_m2) return row.avg_price_m2 as number;
@@ -237,7 +258,8 @@ async function getCachedLocalAvgPriceM2(
   listing: ParsedListing,
   cache: Map<string, number | null>
 ): Promise<number | null> {
-  const key = `${listing.district_id ?? "no-district"}_${listing.region_id ?? "no-region"}`;
+  const wardName = listing.location ? listing.location.split(",")[0].trim() : "";
+  const key = `${wardName}_${listing.district_id ?? "no-district"}_${listing.region_id ?? "no-region"}`;
   if (cache.has(key)) return cache.get(key)!;
   const result = await getLocalAvgPriceM2(client, listing);
   cache.set(key, result);

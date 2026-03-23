@@ -1,19 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getWriteDB } from "@/lib/db-write";
+import { auth } from "@/auth";
 
-// GET /api/watchdogs?user_id=1
-export async function GET(req: NextRequest) {
-  const sp = req.nextUrl.searchParams;
-  const userId = sp.get("user_id");
-
-  if (!userId) {
-    return NextResponse.json({ error: "user_id required" }, { status: 400 });
+// GET /api/watchdogs
+export async function GET() {
+  const session = await auth();
+  if (!session?.user?.id) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
   const db = getWriteDB();
   const watchdogs = await db
     .prepare("SELECT * FROM watchdogs WHERE user_id = ? ORDER BY created_at DESC")
-    .all(parseInt(userId, 10));
+    .all(session.user.id);
 
   // Add match counts
   const countStmt = db.prepare(
@@ -29,13 +28,15 @@ export async function GET(req: NextRequest) {
 
 // POST /api/watchdogs
 export async function POST(req: NextRequest) {
+  const session = await auth();
+  if (!session?.user?.id) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
   const body = await req.json();
 
-  if (!body.user_id || !body.name) {
-    return NextResponse.json(
-      { error: "user_id and name are required" },
-      { status: 400 }
-    );
+  if (!body.name) {
+    return NextResponse.json({ error: "name is required" }, { status: 400 });
   }
 
   const db = getWriteDB();
@@ -51,7 +52,7 @@ export async function POST(req: NextRequest) {
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     )
     .run(
-      body.user_id,
+      session.user.id,
       body.name,
       body.category || null,
       body.region_id || null,

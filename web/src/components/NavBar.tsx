@@ -3,6 +3,8 @@
 import React, { useState, useRef, useEffect } from "react";
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
+import { useSession, signIn, signOut } from "next-auth/react";
+import { useFavorites } from "@/components/FavoritesProvider";
 
 // ── Icons ────────────────────────────────────────────────────────────────────
 
@@ -149,19 +151,8 @@ export default function NavBar() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const category = searchParams.get("category") ?? "";
-  const [savedCount, setSavedCount] = useState(0);
-
-  useEffect(() => {
-    function read() {
-      try {
-        const arr: string[] = JSON.parse(localStorage.getItem("saved_listings") || "[]");
-        setSavedCount(arr.length);
-      } catch { /* ignore */ }
-    }
-    read();
-    window.addEventListener("storage", read);
-    return () => window.removeEventListener("storage", read);
-  }, []);
+  const { data: session } = useSession();
+  const { count: savedCount, isLoggedIn } = useFavorites();
 
   const onInzerce = pathname.startsWith("/inzerce");
   const isNajem   = onInzerce && category.includes("najem");
@@ -212,8 +203,9 @@ export default function NavBar() {
           </a>
 
           <a
-            href="/ulozene"
-            className={`relative flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium transition-all ${
+            href={isLoggedIn ? "/ulozene" : undefined}
+            onClick={!isLoggedIn ? () => signIn("google") : undefined}
+            className={`relative flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium transition-all cursor-pointer ${
               savedCount > 0
                 ? "border-red/25 bg-red-dim text-red hover:border-red/40"
                 : "border-border bg-card text-muted hover:border-border-light hover:text-foreground"
@@ -237,6 +229,41 @@ export default function NavBar() {
             <IcoMap />
             Mapa
           </a>
+
+          {/* Auth */}
+          {session ? (
+            <div className="relative group">
+              <button className="flex items-center gap-2 rounded-xl border border-border bg-card px-2 py-1.5 text-xs text-muted hover:text-foreground hover:border-border-light transition-all">
+                {session.user?.image
+                  ? <img src={session.user.image} alt="" className="w-5 h-5 rounded-full" />
+                  : <span className="w-5 h-5 rounded-full bg-accent/30 flex items-center justify-center text-[10px] font-bold text-accent-light">
+                      {session.user?.name?.[0] ?? "U"}
+                    </span>
+                }
+                <span className="hidden sm:inline max-w-[80px] truncate">{session.user?.name?.split(" ")[0]}</span>
+              </button>
+              <div className="absolute right-0 top-full pt-2 z-50 hidden group-hover:block">
+                <div className="rounded-xl border border-border/80 bg-card shadow-2xl shadow-black/70 p-1 min-w-[140px]">
+                  <button
+                    onClick={() => signOut()}
+                    className="w-full text-left px-3 py-2 text-xs text-muted hover:text-foreground hover:bg-card-hover rounded-lg transition-colors"
+                  >
+                    Odhlásit se
+                  </button>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <button
+              onClick={() => signIn("google")}
+              className="flex items-center gap-1.5 rounded-xl border border-border bg-card px-3 py-1.5 text-xs font-medium text-muted hover:text-foreground hover:border-border-light transition-all"
+            >
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>
+              </svg>
+              Přihlásit
+            </button>
+          )}
         </div>
       </div>
     </nav>

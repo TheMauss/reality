@@ -129,7 +129,7 @@ function CompactCard({ listing }: { listing: Listing }) {
   const days = daysOn(listing.first_seen_at);
   const layout = parseLayout(listing.title);
   const { ref, url: imgUrl } = useThumb(listing.id);
-  const { saved, toggle } = useSaved(listing.id);
+  const { saved, toggle, isLoggedIn } = useSaved(listing.id);
 
   return (
     <div ref={ref}
@@ -206,7 +206,7 @@ export default function ListingCard({ listing, compact = false }: { listing: Lis
   const days = daysOn(listing.first_seen_at);
   const layout = parseLayout(listing.title);
   const { ref, url: imgUrl } = useThumb(listing.id);
-  const { saved, toggle } = useSaved(listing.id);
+  const { saved, toggle, isLoggedIn } = useSaved(listing.id);
   const isNew = days <= 2;
 
   if (compact) return <CompactCard listing={listing} />;
@@ -251,14 +251,16 @@ export default function ListingCard({ listing, compact = false }: { listing: Lis
           <span className="rounded-full bg-black/50 px-2 py-0.5 text-[10px] font-medium text-white/60 backdrop-blur-sm tabular-nums">
             {days === 0 ? "Dnes" : days === 1 ? "1 den" : `${days}d`}
           </span>
-          <button onClick={toggle} aria-label={saved ? "Odebrat" : "Uložit"}
-            className={`flex h-7 w-7 items-center justify-center rounded-full backdrop-blur-sm transition-all ${
-              saved ? "bg-red/80 text-white" : "bg-black/40 text-white/50 hover:bg-black/60 hover:text-white"
-            }`}>
-            <svg width="13" height="13" viewBox="0 0 24 24" fill={saved ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2.2">
-              <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
-            </svg>
-          </button>
+          {isLoggedIn && (
+            <button onClick={toggle} aria-label={saved ? "Odebrat" : "Uložit"}
+              className={`flex h-7 w-7 items-center justify-center rounded-full backdrop-blur-sm transition-all ${
+                saved ? "bg-red/80 text-white" : "bg-black/40 text-white/50 hover:bg-black/60 hover:text-white"
+              }`}>
+              <svg width="13" height="13" viewBox="0 0 24 24" fill={saved ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2.2">
+                <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
+              </svg>
+            </button>
+          )}
         </div>
 
         {/* Price over image */}

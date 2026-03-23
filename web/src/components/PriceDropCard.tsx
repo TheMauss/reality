@@ -152,14 +152,16 @@ export default function PriceDropCard({ drop }: { drop: PriceDrop }) {
             style={{ color: cat.color, background: `${cat.color}22` }}>
             {cat.label}
           </span>
-          <button onClick={toggle} aria-label={saved ? "Odebrat" : "Uložit"}
-            className={`flex h-7 w-7 items-center justify-center rounded-full backdrop-blur-sm transition-all ${
-              saved ? "bg-red/80 text-white" : "bg-black/40 text-white/50 hover:bg-black/60 hover:text-white"
-            }`}>
-            <svg width="12" height="12" viewBox="0 0 24 24" fill={saved ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2.2">
-              <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
-            </svg>
-          </button>
+          {isLoggedIn && (
+            <button onClick={toggle} aria-label={saved ? "Odebrat" : "Uložit"}
+              className={`flex h-7 w-7 items-center justify-center rounded-full backdrop-blur-sm transition-all ${
+                saved ? "bg-red/80 text-white" : "bg-black/40 text-white/50 hover:bg-black/60 hover:text-white"
+              }`}>
+              <svg width="12" height="12" viewBox="0 0 24 24" fill={saved ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2.2">
+                <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
+              </svg>
+            </button>
+          )}
         </div>
 
         {/* Price over image */}

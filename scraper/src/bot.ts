@@ -33,16 +33,14 @@ export function startBot(): void {
   });
 
   bot.onText(/\/start/, (msg) => {
-    bot.sendMessage(msg.chat.id,
-      "Vítejte v CenovýPád botu!\n\n" +
-      "/subscribe vas@email.cz – přihlásit se k upozorněním\n" +
-      "/unsubscribe – odhlásit se\n" +
-      "/status – stav\n" +
-      "/watchdog list – seznam hlídacích psů\n" +
-      "/watchdog add <název> – vytvořit hlídacího psa\n" +
-      "/watchdog pause <id> – pozastavit\n" +
-      "/watchdog resume <id> – obnovit\n" +
-      "/watchdog delete <id> – smazat"
+    const chatId = msg.chat.id;
+    bot.sendMessage(chatId,
+      `Vítejte v CenovýPád botu!\n\n` +
+      `Vaše Chat ID: \`${chatId}\`\n\n` +
+      `Zkopírujte toto číslo do nastavení na webu (Hlídací pes → Telegram Chat ID) pro zapnutí notifikací.\n\n` +
+      `/status – počty inzerátů\n` +
+      `/watchdog list – seznam hlídacích psů`,
+      { parse_mode: "Markdown" }
     );
   });
 

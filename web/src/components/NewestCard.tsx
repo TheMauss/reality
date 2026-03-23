@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useFavorites } from "@/components/FavoritesProvider";
 
 interface Listing {
   id: string;
@@ -29,31 +29,15 @@ function daysAgo(dateStr: string): string {
 }
 
 function useSaved(id: string) {
-  const [saved, setSaved] = useState(false);
-  useEffect(() => {
-    try {
-      const arr: string[] = JSON.parse(localStorage.getItem("saved_listings") || "[]");
-      setSaved(arr.includes(id));
-    } catch { /* ignore */ }
-  }, [id]);
-
-  function toggle(e: React.MouseEvent) {
-    e.preventDefault(); e.stopPropagation();
-    try {
-      const arr: string[] = JSON.parse(localStorage.getItem("saved_listings") || "[]");
-      const next = arr.includes(id) ? arr.filter(x => x !== id) : [...arr, id];
-      localStorage.setItem("saved_listings", JSON.stringify(next));
-      setSaved(next.includes(id));
-      window.dispatchEvent(new Event("storage"));
-    } catch { /* ignore */ }
-  }
-
-  return { saved, toggle };
+  const { savedIds, toggle: toggleFav, isLoggedIn } = useFavorites();
+  const saved = savedIds.has(id);
+  const toggle = (e: React.MouseEvent) => toggleFav(id, e);
+  return { saved, toggle, isLoggedIn };
 }
 
 export default function NewestCard({ listing }: { listing: Listing }) {
   const timeLabel = daysAgo(listing.first_seen_at);
-  const { saved, toggle } = useSaved(listing.id);
+  const { saved, toggle, isLoggedIn } = useSaved(listing.id);
 
   return (
     <a
@@ -91,7 +75,7 @@ export default function NewestCard({ listing }: { listing: Listing }) {
           <span className="rounded-md bg-black/60 px-2 py-0.5 text-[10px] text-white/80 backdrop-blur-sm">
             {timeLabel}
           </span>
-          <button
+          {isLoggedIn && <button
             onClick={toggle}
             aria-label={saved ? "Odebrat z uložených" : "Uložit"}
             className={`flex h-6 w-6 items-center justify-center rounded-full backdrop-blur-sm transition-all ${
@@ -101,7 +85,7 @@ export default function NewestCard({ listing }: { listing: Listing }) {
             <svg width="11" height="11" viewBox="0 0 24 24" fill={saved ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2.2">
               <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
             </svg>
-          </button>
+          </button>}
         </div>
 
         {/* Area badge bottom right */}

@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useCallback, useRef } from "react";
+import { useSession, signIn } from "next-auth/react";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -135,11 +136,6 @@ const TYPE_LABEL: Record<string, string> = {
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
-function getUserId(): number {
-  let id = localStorage.getItem("watchdog_user_id");
-  if (!id) { id = "1"; localStorage.setItem("watchdog_user_id", id); }
-  return parseInt(id, 10);
-}
 
 function formatPrice(p: number | null): string {
   if (!p) return "—";
@@ -261,6 +257,7 @@ function LocationSearch({
 // ── Main component ────────────────────────────────────────────────────────────
 
 export default function WatchdogClient() {
+  const { data: session, status } = useSession();
   const [watchdogs, setWatchdogs] = useState<Watchdog[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -271,20 +268,44 @@ export default function WatchdogClient() {
   const [matchesTotal, setMatchesTotal] = useState(0);
   const [matchesPage, setMatchesPage] = useState(1);
   const [matchesLoading, setMatchesLoading] = useState(false);
-
-  const userId = typeof window !== "undefined" ? getUserId() : 1;
+  const [telegramId, setTelegramId] = useState("");
+  const [telegramSaving, setTelegramSaving] = useState(false);
+  const [telegramSaved, setTelegramSaved] = useState(false);
 
   const fetchWatchdogs = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch(`/api/watchdogs?user_id=${userId}`);
+      const res = await fetch(`/api/watchdogs`);
       const data = await res.json();
       setWatchdogs(data.watchdogs || []);
     } catch { /* ignore */ }
     finally { setLoading(false); }
-  }, [userId]);
+  }, []);
 
-  useEffect(() => { fetchWatchdogs(); }, [fetchWatchdogs]);
+  useEffect(() => {
+    if (status === "authenticated") {
+      fetchWatchdogs();
+      fetch("/api/user").then(r => r.json()).then(d => {
+        if (d.user?.telegram_id) setTelegramId(d.user.telegram_id);
+      }).catch(() => {});
+    } else if (status !== "loading") {
+      setLoading(false);
+    }
+  }, [status, fetchWatchdogs]);
+
+  async function saveTelegramId() {
+    setTelegramSaving(true);
+    try {
+      await fetch("/api/user", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ telegram_id: telegramId }),
+      });
+      setTelegramSaved(true);
+      setTimeout(() => setTelegramSaved(false), 2000);
+    } catch { /* ignore */ }
+    finally { setTelegramSaving(false); }
+  }
 
   const fetchMatches = useCallback(async (wdId: number, page = 1) => {
     setMatchesLoading(true);
@@ -301,7 +322,6 @@ export default function WatchdogClient() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     const body = {
-      user_id: userId,
       name: form.name,
       category: form.category || null,
       location: form.location || null,
@@ -396,6 +416,24 @@ export default function WatchdogClient() {
 
   return (
     <div className="space-y-8">
+      {/* Not logged in */}
+      {status !== "loading" && !session && (
+        <div className="flex flex-col items-center justify-center py-24 gap-4 text-center">
+          <div className="text-4xl">🐕</div>
+          <h2 className="text-xl font-bold">Přihlaste se pro hlídacího psa</h2>
+          <p className="text-sm text-muted max-w-sm">
+            Pro ukládání hlídačů a příjem upozornění se musíte přihlásit.
+          </p>
+          <button
+            onClick={() => signIn("google")}
+            className="mt-2 flex items-center gap-2 rounded-xl bg-white px-5 py-2.5 text-sm font-semibold text-gray-800 shadow hover:shadow-md transition-all"
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/></svg>
+            Přihlásit přes Google
+          </button>
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
@@ -412,190 +450,256 @@ export default function WatchdogClient() {
         </button>
       </div>
 
+      {/* Telegram settings */}
+      {session && (
+        <div className="rounded-2xl border border-border bg-card p-5">
+          <div className="flex items-start justify-between gap-6">
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 mb-1">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" className="text-blue-400 shrink-0">
+                  <path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.894 8.221-1.97 9.28c-.145.658-.537.818-1.084.508l-3-2.21-1.447 1.394c-.16.16-.295.295-.605.295l.213-3.053 5.56-5.023c.242-.213-.054-.333-.373-.12L8.32 13.617l-2.96-.924c-.643-.204-.657-.643.136-.953l11.57-4.461c.537-.194 1.006.131.828.942z"/>
+                </svg>
+                <span className="text-sm font-semibold">Telegram notifikace</span>
+              </div>
+              <p className="text-xs text-muted mb-3">
+                Napiš <span className="font-mono bg-background border border-border rounded px-1.5 py-0.5 text-foreground">@HlidaciPesBot</span> na Telegramu,
+                pošli <span className="font-mono bg-background border border-border rounded px-1.5 py-0.5 text-foreground">/start</span> a zkopíruj sem své Chat ID.
+              </p>
+              <div className="flex items-center gap-2">
+                <input
+                  type="text"
+                  value={telegramId}
+                  onChange={e => { setTelegramId(e.target.value); setTelegramSaved(false); }}
+                  placeholder="např. 123456789"
+                  className="w-48 rounded-xl border border-border bg-background px-3 py-2 text-sm outline-none focus:border-blue-400/60 transition-colors font-mono"
+                />
+                <button
+                  onClick={saveTelegramId}
+                  disabled={telegramSaving}
+                  className={`rounded-xl px-4 py-2 text-sm font-medium transition-all ${
+                    telegramSaved
+                      ? "border border-green-500/30 bg-green-500/10 text-green-400"
+                      : "border border-blue-400/30 bg-blue-400/10 text-blue-300 hover:bg-blue-400/20"
+                  }`}
+                >
+                  {telegramSaved ? "✓ Uloženo" : telegramSaving ? "Ukládám…" : "Uložit"}
+                </button>
+              </div>
+            </div>
+            <div className="text-right shrink-0">
+              <span className="text-xs text-muted">Email</span>
+              <div className="text-sm font-medium mt-0.5 truncate max-w-[180px]">{session.user?.email}</div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Form */}
       {showForm && (
-        <form onSubmit={handleSubmit} className="rounded-2xl border border-border bg-card p-6 space-y-5">
-          <h2 className="text-lg font-semibold">{editId ? "Upravit hlídacího psa" : "Nový hlídací pes"}</h2>
-
-          {/* Name */}
-          <div>
-            <label className="text-xs font-medium text-muted">Název</label>
-            <input type="text" required value={form.name}
-              onChange={e => setForm({ ...form, name: e.target.value })}
-              placeholder="např. Byty Praha do 5M"
-              className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-accent transition-colors"
-            />
+        <form onSubmit={handleSubmit} className="rounded-2xl border border-border bg-card overflow-hidden">
+          {/* Form header */}
+          <div className="flex items-center justify-between px-6 py-4 border-b border-border">
+            <h2 className="text-base font-semibold">{editId ? "Upravit hlídacího psa" : "Nový hlídací pes"}</h2>
+            <button type="button" onClick={() => { setShowForm(false); setEditId(null); }}
+              className="flex h-7 w-7 items-center justify-center rounded-lg text-muted hover:text-foreground hover:bg-card-hover transition-colors">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+              </svg>
+            </button>
           </div>
 
-          {/* Filters grid */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {/* Category */}
+          <div className="p-6 space-y-6">
+            {/* Name */}
             <div>
-              <label className="text-xs font-medium text-muted">Kategorie</label>
-              <select value={form.category} onChange={e => setForm({ ...form, category: e.target.value })}
-                className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-accent transition-colors">
-                {CATEGORIES.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
-              </select>
+              <label className="text-xs font-semibold text-muted uppercase tracking-wider">Název</label>
+              <input type="text" required value={form.name}
+                onChange={e => setForm({ ...form, name: e.target.value })}
+                placeholder="např. Byty Praha do 5M"
+                className="mt-1.5 w-full rounded-xl border border-border bg-background px-3.5 py-2.5 text-sm outline-none focus:border-accent transition-colors"
+              />
             </div>
 
-            {/* Location search */}
-            <div className="sm:col-span-2 lg:col-span-2">
-              <label className="text-xs font-medium text-muted">Lokalita</label>
-              <div className="mt-1">
-                <LocationSearch
-                  value={form.locationLabel}
-                  onSelect={handleLocationSelect}
-                  onClear={handleLocationClear}
-                />
-              </div>
+            {/* Filters */}
+            <div>
+              <label className="text-xs font-semibold text-muted uppercase tracking-wider">Filtry</label>
+              <div className="mt-1.5 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                <div>
+                  <select value={form.category} onChange={e => setForm({ ...form, category: e.target.value })}
+                    className="w-full rounded-xl border border-border bg-background px-3.5 py-2.5 text-sm outline-none focus:border-accent transition-colors">
+                    {CATEGORIES.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
+                  </select>
+                </div>
 
-              {/* Avg price info badge */}
-              {form.avg_price_m2 && (
-                <div className="mt-2 flex items-center gap-2 rounded-lg border border-amber-500/20 bg-amber-500/5 px-3 py-2">
-                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-amber-400 shrink-0">
-                    <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
+                <div className="sm:col-span-2">
+                  <LocationSearch value={form.locationLabel} onSelect={handleLocationSelect} onClear={handleLocationClear} />
+                  {form.avg_price_m2 && (
+                    <div className="mt-2 flex items-center gap-2 rounded-lg border border-amber-500/20 bg-amber-500/5 px-3 py-1.5">
+                      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-amber-400 shrink-0">
+                        <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
+                      </svg>
+                      <span className="text-xs text-muted">Poslední prodejní cena:</span>
+                      <span className="text-xs font-bold text-amber-400">{formatAvg(form.avg_price_m2)}</span>
+                    </div>
+                  )}
+                </div>
+
+                <input type="number" value={form.price_min} onChange={e => setForm({ ...form, price_min: e.target.value })}
+                  placeholder="Cena od (Kč)"
+                  className="rounded-xl border border-border bg-background px-3.5 py-2.5 text-sm outline-none focus:border-accent transition-colors" />
+                <input type="number" value={form.price_max} onChange={e => setForm({ ...form, price_max: e.target.value })}
+                  placeholder="Cena do (Kč)"
+                  className="rounded-xl border border-border bg-background px-3.5 py-2.5 text-sm outline-none focus:border-accent transition-colors" />
+
+                <div className="flex gap-2">
+                  <input type="number" value={form.area_min} onChange={e => setForm({ ...form, area_min: e.target.value })}
+                    placeholder="m² od"
+                    className="w-full rounded-xl border border-border bg-background px-3.5 py-2.5 text-sm outline-none focus:border-accent transition-colors" />
+                  <input type="number" value={form.area_max} onChange={e => setForm({ ...form, area_max: e.target.value })}
+                    placeholder="m² do"
+                    className="w-full rounded-xl border border-border bg-background px-3.5 py-2.5 text-sm outline-none focus:border-accent transition-colors" />
+                </div>
+
+                <input type="text" value={form.keywords} onChange={e => setForm({ ...form, keywords: e.target.value })}
+                  placeholder="Klíčová slova: balkon, garáž…"
+                  className="sm:col-span-2 rounded-xl border border-border bg-background px-3.5 py-2.5 text-sm outline-none focus:border-accent transition-colors" />
+              </div>
+            </div>
+
+            {/* Watch types */}
+            <div>
+              <label className="text-xs font-semibold text-muted uppercase tracking-wider">Co sledovat</label>
+              <div className="mt-1.5 grid grid-cols-2 lg:grid-cols-4 gap-3">
+                {/* New */}
+                <button type="button" onClick={() => setForm(f => ({ ...f, watch_new: !f.watch_new }))}
+                  className={`flex flex-col items-start gap-1.5 rounded-xl border p-3.5 text-left transition-all ${
+                    form.watch_new
+                      ? "border-green-500/40 bg-green-500/8 ring-1 ring-green-500/20"
+                      : "border-border bg-background hover:border-border-light"
+                  }`}>
+                  <div className="flex w-full items-center justify-between">
+                    <span className="text-lg">🆕</span>
+                    <span className={`h-4 w-4 rounded-full border-2 transition-colors ${form.watch_new ? "border-green-500 bg-green-500" : "border-border"}`} />
+                  </div>
+                  <span className={`text-sm font-semibold ${form.watch_new ? "text-green-400" : "text-foreground"}`}>Nové inzeráty</span>
+                  <span className="text-[11px] text-muted leading-tight">Ihned při přidání do nabídky</span>
+                </button>
+
+                {/* Price drops */}
+                <button type="button" onClick={() => setForm(f => ({ ...f, watch_drops: !f.watch_drops }))}
+                  className={`flex flex-col items-start gap-1.5 rounded-xl border p-3.5 text-left transition-all ${
+                    form.watch_drops
+                      ? "border-red-500/40 bg-red-500/8 ring-1 ring-red-500/20"
+                      : "border-border bg-background hover:border-border-light"
+                  }`}>
+                  <div className="flex w-full items-center justify-between">
+                    <span className="text-lg">📉</span>
+                    <span className={`h-4 w-4 rounded-full border-2 transition-colors ${form.watch_drops ? "border-red-500 bg-red-500" : "border-border"}`} />
+                  </div>
+                  <span className={`text-sm font-semibold ${form.watch_drops ? "text-red-400" : "text-foreground"}`}>Pokles ceny</span>
+                  {form.watch_drops ? (
+                    <div className="flex items-center gap-1.5 mt-0.5" onClick={e => e.stopPropagation()}>
+                      <span className="text-[11px] text-muted">min</span>
+                      <input type="number" value={form.watch_drops_min_pct}
+                        onChange={e => setForm(f => ({ ...f, watch_drops_min_pct: e.target.value }))}
+                        className="w-12 rounded-lg border border-red-500/30 bg-red-500/10 px-1.5 py-0.5 text-xs font-bold text-red-300 text-center outline-none" />
+                      <span className="text-[11px] text-muted">%</span>
+                    </div>
+                  ) : (
+                    <span className="text-[11px] text-muted leading-tight">Při snížení inzerované ceny</span>
+                  )}
+                </button>
+
+                {/* Underpriced */}
+                <button type="button" onClick={() => setForm(f => ({ ...f, watch_underpriced: !f.watch_underpriced }))}
+                  className={`flex flex-col items-start gap-1.5 rounded-xl border p-3.5 text-left transition-all ${
+                    form.watch_underpriced
+                      ? "border-amber-500/40 bg-amber-500/8 ring-1 ring-amber-500/20"
+                      : "border-border bg-background hover:border-border-light"
+                  }`}>
+                  <div className="flex w-full items-center justify-between">
+                    <span className="text-lg">💰</span>
+                    <span className={`h-4 w-4 rounded-full border-2 transition-colors ${form.watch_underpriced ? "border-amber-500 bg-amber-500" : "border-border"}`} />
+                  </div>
+                  <span className={`text-sm font-semibold ${form.watch_underpriced ? "text-amber-400" : "text-foreground"}`}>Pod prodejní cenou</span>
+                  {form.watch_underpriced ? (
+                    <div className="flex items-center gap-1.5 mt-0.5" onClick={e => e.stopPropagation()}>
+                      <span className="text-[11px] text-muted">min</span>
+                      <input type="number" value={form.watch_underpriced_pct}
+                        onChange={e => setForm(f => ({ ...f, watch_underpriced_pct: e.target.value }))}
+                        className="w-12 rounded-lg border border-amber-500/30 bg-amber-500/10 px-1.5 py-0.5 text-xs font-bold text-amber-300 text-center outline-none" />
+                      <span className="text-[11px] text-muted">% pod Ø</span>
+                    </div>
+                  ) : (
+                    <span className="text-[11px] text-muted leading-tight">Pod průměrem prodejní ceny v oblasti</span>
+                  )}
+                </button>
+
+                {/* Returned */}
+                <button type="button" onClick={() => setForm(f => ({ ...f, watch_returned: !f.watch_returned }))}
+                  className={`flex flex-col items-start gap-1.5 rounded-xl border p-3.5 text-left transition-all ${
+                    form.watch_returned
+                      ? "border-blue-500/40 bg-blue-500/8 ring-1 ring-blue-500/20"
+                      : "border-border bg-background hover:border-border-light"
+                  }`}>
+                  <div className="flex w-full items-center justify-between">
+                    <span className="text-lg">🔄</span>
+                    <span className={`h-4 w-4 rounded-full border-2 transition-colors ${form.watch_returned ? "border-blue-500 bg-blue-500" : "border-border"}`} />
+                  </div>
+                  <span className={`text-sm font-semibold ${form.watch_returned ? "text-blue-400" : "text-foreground"}`}>Vrácené</span>
+                  <span className="text-[11px] text-muted leading-tight">Inzerát znovu v nabídce po stažení</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Notifications */}
+            <div>
+              <label className="text-xs font-semibold text-muted uppercase tracking-wider">Notifikace</label>
+              <div className="mt-1.5 flex flex-wrap items-center gap-2">
+                <button type="button" onClick={() => setForm(f => ({ ...f, notify_email: !f.notify_email }))}
+                  className={`flex items-center gap-2 rounded-xl border px-3.5 py-2 text-sm font-medium transition-all ${
+                    form.notify_email ? "border-accent/40 bg-accent/10 text-accent-light" : "border-border text-muted hover:text-foreground"
+                  }`}>
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/>
+                    <polyline points="22,6 12,13 2,6"/>
                   </svg>
-                  <span className="text-xs text-muted">Průměrná prodejní cena v oblasti:</span>
-                  <span className="text-xs font-bold text-amber-400">{formatAvg(form.avg_price_m2)}</span>
-                  <span className="text-[10px] text-muted/60 ml-auto">(historické prodeje)</span>
+                  Email
+                </button>
+                <button type="button" onClick={() => setForm(f => ({ ...f, notify_telegram: !f.notify_telegram }))}
+                  className={`flex items-center gap-2 rounded-xl border px-3.5 py-2 text-sm font-medium transition-all ${
+                    form.notify_telegram ? "border-blue-400/40 bg-blue-400/10 text-blue-300" : "border-border text-muted hover:text-foreground"
+                  }`}>
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.894 8.221-1.97 9.28c-.145.658-.537.818-1.084.508l-3-2.21-1.447 1.394c-.16.16-.295.295-.605.295l.213-3.053 5.56-5.023c.242-.213-.054-.333-.373-.12L8.32 13.617l-2.96-.924c-.643-.204-.657-.643.136-.953l11.57-4.461c.537-.194 1.006.131.828.942z"/>
+                  </svg>
+                  Telegram
+                </button>
+
+                <div className="flex rounded-xl border border-border overflow-hidden ml-auto">
+                  {(["instant", "daily", "weekly"] as const).map((freq, i) => (
+                    <button key={freq} type="button"
+                      onClick={() => setForm(f => ({ ...f, notify_frequency: freq }))}
+                      className={`px-3 py-2 text-xs font-medium transition-colors ${i > 0 ? "border-l border-border" : ""} ${
+                        form.notify_frequency === freq ? "bg-accent text-white" : "text-muted hover:text-foreground"
+                      }`}>
+                      {freq === "instant" ? "Okamžitě" : freq === "daily" ? "Denně" : "Týdně"}
+                    </button>
+                  ))}
                 </div>
-              )}
-            </div>
-
-            {/* Price range */}
-            <div>
-              <label className="text-xs font-medium text-muted">Cena od</label>
-              <input type="number" value={form.price_min}
-                onChange={e => setForm({ ...form, price_min: e.target.value })}
-                placeholder="0"
-                className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-accent transition-colors"
-              />
-            </div>
-            <div>
-              <label className="text-xs font-medium text-muted">Cena do</label>
-              <input type="number" value={form.price_max}
-                onChange={e => setForm({ ...form, price_max: e.target.value })}
-                placeholder="neomezeno"
-                className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-accent transition-colors"
-              />
-            </div>
-
-            {/* Area range */}
-            <div className="grid grid-cols-2 gap-2">
-              <div>
-                <label className="text-xs font-medium text-muted">m² od</label>
-                <input type="number" value={form.area_min}
-                  onChange={e => setForm({ ...form, area_min: e.target.value })}
-                  className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-accent transition-colors"
-                />
-              </div>
-              <div>
-                <label className="text-xs font-medium text-muted">m² do</label>
-                <input type="number" value={form.area_max}
-                  onChange={e => setForm({ ...form, area_max: e.target.value })}
-                  className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-accent transition-colors"
-                />
               </div>
             </div>
 
-            {/* Keywords */}
-            <div>
-              <label className="text-xs font-medium text-muted">Klíčová slova</label>
-              <input type="text" value={form.keywords}
-                onChange={e => setForm({ ...form, keywords: e.target.value })}
-                placeholder="balkon, garáž, zahrada"
-                className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-accent transition-colors"
-              />
+            {/* Submit */}
+            <div className="flex gap-3 pt-1">
+              <button type="submit"
+                className="rounded-xl bg-accent px-6 py-2.5 text-sm font-semibold text-white hover:bg-accent/80 transition-colors">
+                {editId ? "Uložit změny" : "Vytvořit hlídacího psa"}
+              </button>
+              <button type="button" onClick={() => { setShowForm(false); setEditId(null); }}
+                className="rounded-xl border border-border px-5 py-2.5 text-sm text-muted hover:text-foreground transition-colors">
+                Zrušit
+              </button>
             </div>
-          </div>
-
-          {/* Watch types */}
-          <div>
-            <label className="text-xs font-medium text-muted block mb-2">Co sledovat</label>
-            <div className="flex flex-wrap gap-4">
-              <label className="flex items-center gap-2 text-sm">
-                <input type="checkbox" checked={form.watch_new}
-                  onChange={e => setForm({ ...form, watch_new: e.target.checked })}
-                  className="accent-green-500" />
-                Nové inzeráty
-              </label>
-
-              <label className="flex items-center gap-2 text-sm">
-                <input type="checkbox" checked={form.watch_drops}
-                  onChange={e => setForm({ ...form, watch_drops: e.target.checked })}
-                  className="accent-red-500" />
-                Cenové poklesy
-              </label>
-              {form.watch_drops && (
-                <div className="flex items-center gap-1 text-sm">
-                  <span className="text-muted">min</span>
-                  <input type="number" value={form.watch_drops_min_pct}
-                    onChange={e => setForm({ ...form, watch_drops_min_pct: e.target.value })}
-                    className="w-16 rounded border border-border bg-background px-2 py-1 text-sm text-center" />
-                  <span className="text-muted">%</span>
-                </div>
-              )}
-
-              <label className="flex items-center gap-2 text-sm">
-                <input type="checkbox" checked={form.watch_underpriced}
-                  onChange={e => setForm({ ...form, watch_underpriced: e.target.checked })}
-                  className="accent-amber-500" />
-                Pod tržní cenou
-              </label>
-              {form.watch_underpriced && (
-                <div className="flex items-center gap-1 text-sm">
-                  <span className="text-muted">min</span>
-                  <input type="number" value={form.watch_underpriced_pct}
-                    onChange={e => setForm({ ...form, watch_underpriced_pct: e.target.value })}
-                    className="w-16 rounded border border-border bg-background px-2 py-1 text-sm text-center" />
-                  <span className="text-muted">% pod průměrem</span>
-                </div>
-              )}
-
-              <label className="flex items-center gap-2 text-sm">
-                <input type="checkbox" checked={form.watch_returned}
-                  onChange={e => setForm({ ...form, watch_returned: e.target.checked })}
-                  className="accent-blue-500" />
-                Vrácené inzeráty
-              </label>
-            </div>
-          </div>
-
-          {/* Notifications */}
-          <div>
-            <label className="text-xs font-medium text-muted block mb-2">Notifikace</label>
-            <div className="flex flex-wrap gap-4 items-center">
-              <label className="flex items-center gap-2 text-sm">
-                <input type="checkbox" checked={form.notify_email}
-                  onChange={e => setForm({ ...form, notify_email: e.target.checked })} />
-                Email
-              </label>
-              <label className="flex items-center gap-2 text-sm">
-                <input type="checkbox" checked={form.notify_telegram}
-                  onChange={e => setForm({ ...form, notify_telegram: e.target.checked })} />
-                Telegram
-              </label>
-              <select value={form.notify_frequency}
-                onChange={e => setForm({ ...form, notify_frequency: e.target.value })}
-                className="rounded-lg border border-border bg-background px-3 py-1.5 text-sm">
-                <option value="instant">Okamžitě</option>
-                <option value="daily">Denní souhrn</option>
-                <option value="weekly">Týdenní souhrn</option>
-              </select>
-            </div>
-          </div>
-
-          {/* Buttons */}
-          <div className="flex gap-3">
-            <button type="submit"
-              className="rounded-xl bg-accent px-5 py-2 text-sm font-semibold text-white hover:bg-accent/80 transition-colors">
-              {editId ? "Uložit změny" : "Vytvořit"}
-            </button>
-            <button type="button"
-              onClick={() => { setShowForm(false); setEditId(null); }}
-              className="rounded-xl border border-border px-5 py-2 text-sm text-muted hover:text-foreground transition-colors">
-              Zrušit
-            </button>
           </div>
         </form>
       )}

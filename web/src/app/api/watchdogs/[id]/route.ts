@@ -1,16 +1,20 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getWriteDB } from "@/lib/db-write";
+import { auth } from "@/auth";
 
 // PUT /api/watchdogs/[id]
 export async function PUT(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const session = await auth();
+  if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
   const { id } = await params;
   const body = await req.json();
   const db = getWriteDB();
 
-  const existing = await db.prepare("SELECT * FROM watchdogs WHERE id = ?").get(parseInt(id, 10));
+  const existing = await db.prepare("SELECT * FROM watchdogs WHERE id = ? AND user_id = ?").get(parseInt(id, 10), session.user.id) as unknown as { id: number } | undefined;
   if (!existing) {
     return NextResponse.json({ error: "Watchdog not found" }, { status: 404 });
   }
@@ -57,12 +61,15 @@ export async function DELETE(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const session = await auth();
+  if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
   const { id } = await params;
   const db = getWriteDB();
 
-  // Delete matches first, then watchdog
-  await db.prepare("DELETE FROM watchdog_matches WHERE watchdog_id = ?").run(parseInt(id, 10));
-  const result = await db.prepare("DELETE FROM watchdogs WHERE id = ?").run(parseInt(id, 10));
+  // Delete matches first, then watchdog (only if owned by user)
+  await db.prepare("DELETE FROM watchdog_matches WHERE watchdog_id = ? AND watchdog_id IN (SELECT id FROM watchdogs WHERE user_id = ?)").run(parseInt(id, 10), session.user.id);
+  const result = await db.prepare("DELETE FROM watchdogs WHERE id = ? AND user_id = ?").run(parseInt(id, 10), session.user.id);
 
   if (result.changes === 0) {
     return NextResponse.json({ error: "Watchdog not found" }, { status: 404 });
@@ -76,10 +83,13 @@ export async function PATCH(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const session = await auth();
+  if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
   const { id } = await params;
   const db = getWriteDB();
 
-  const existing = await db.prepare("SELECT active FROM watchdogs WHERE id = ?").get(parseInt(id, 10)) as unknown as
+  const existing = await db.prepare("SELECT active FROM watchdogs WHERE id = ? AND user_id = ?").get(parseInt(id, 10), session.user.id) as unknown as
     | { active: number }
     | undefined;
 
