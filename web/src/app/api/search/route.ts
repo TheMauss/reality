@@ -20,22 +20,39 @@ export async function GET(req: NextRequest) {
     count?: number;
   }> = [];
 
-  // Search sold regions
+  // Search sold regions (use latest price from history, fallback to table avg)
   try {
     const regions = await db
-      .prepare("SELECT id, name, avg_price_m2 FROM sold_regions WHERE name LIKE ? LIMIT 5")
+      .prepare(
+        `SELECT r.id, r.name, COALESCE(h.avg_price_m2, r.avg_price_m2) as avg_price_m2
+        FROM sold_regions r
+        LEFT JOIN (
+          SELECT entity_id, avg_price_m2 FROM sold_price_history
+          WHERE entity_type = 'region' AND category = 'byty'
+          GROUP BY entity_id
+          HAVING (year * 100 + month) = MAX(year * 100 + month)
+        ) h ON h.entity_id = r.id
+        WHERE r.name LIKE ? LIMIT 5`
+      )
       .all(pattern) as unknown as Array<{ id: number; name: string; avg_price_m2: number }>;
     for (const r of regions) {
       results.push({ type: "region", id: r.id, name: r.name, avg_price_m2: r.avg_price_m2 });
     }
   } catch { /* table might not exist */ }
 
-  // Search sold districts
+  // Search sold districts (use latest price from history, fallback to table avg)
   try {
     const districts = await db
       .prepare(
-        `SELECT d.id, d.name, d.avg_price_m2, r.name as region_name
-        FROM sold_districts d JOIN sold_regions r ON r.id = d.region_id
+        `SELECT d.id, d.name, r.name as region_name, COALESCE(h.avg_price_m2, d.avg_price_m2) as avg_price_m2
+        FROM sold_districts d
+        JOIN sold_regions r ON r.id = d.region_id
+        LEFT JOIN (
+          SELECT entity_id, avg_price_m2 FROM sold_price_history
+          WHERE entity_type = 'district' AND category = 'byty'
+          GROUP BY entity_id
+          HAVING (year * 100 + month) = MAX(year * 100 + month)
+        ) h ON h.entity_id = d.id
         WHERE d.name LIKE ? LIMIT 10`
       )
       .all(pattern) as unknown as Array<{ id: number; name: string; avg_price_m2: number; region_name: string }>;
@@ -44,13 +61,21 @@ export async function GET(req: NextRequest) {
     }
   } catch { /* */ }
 
-  // Search sold wards
+  // Search sold wards (use latest price from history, fallback to ward avg)
   try {
     const wards = await db
       .prepare(
-        `SELECT w.id, w.name, w.avg_price_m2, d.name as district_name
+        `SELECT MIN(w.id) as id, w.name, d.name as district_name,
+          COALESCE(
+            (SELECT avg_price_m2 FROM sold_price_history
+             WHERE entity_type = 'ward' AND entity_id = MIN(w.id) AND category = 'byty'
+             ORDER BY year * 100 + month DESC LIMIT 1),
+            AVG(w.avg_price_m2)
+          ) as avg_price_m2
         FROM sold_wards w JOIN sold_districts d ON d.id = w.district_id
-        WHERE w.name LIKE ? LIMIT 10`
+        WHERE w.name LIKE ?
+        GROUP BY w.name, w.district_id
+        LIMIT 10`
       )
       .all(pattern) as unknown as Array<{ id: number; name: string; avg_price_m2: number; district_name: string }>;
     for (const w of wards) {
