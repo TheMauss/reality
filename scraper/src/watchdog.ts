@@ -185,7 +185,12 @@ export async function runWatchdog(client: Client, events: ScrapeEvents): Promise
 }
 
 function matchesFilter(listing: ParsedListing, wd: Watchdog): boolean {
-  if (wd.category && listing.category !== wd.category) return false;
+  if (wd.category) {
+    let cats: string[];
+    try { cats = JSON.parse(wd.category); if (!Array.isArray(cats)) cats = [wd.category]; }
+    catch { cats = [wd.category]; }
+    if (cats.length > 0 && !cats.includes(listing.category)) return false;
+  }
   if (wd.region_id && listing.region_id !== wd.region_id) return false;
   if (wd.district_id && listing.district_id !== wd.district_id) return false;
 

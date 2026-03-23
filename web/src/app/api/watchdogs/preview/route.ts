@@ -8,7 +8,7 @@ export async function POST(req: NextRequest) {
 
   const body = await req.json();
   const {
-    category, district_id, region_id, location,
+    categories, district_id, region_id, location,
     price_min, price_max, area_min, area_max,
     price_m2_min, price_m2_max,
     layout, keywords,
@@ -19,7 +19,10 @@ export async function POST(req: NextRequest) {
   const conditions: string[] = ["delisted = 0"];
   const args: unknown[] = [];
 
-  if (category) { conditions.push("category = ?"); args.push(category); }
+  if (categories && Array.isArray(categories) && categories.length > 0) {
+    conditions.push(`category IN (${categories.map(() => "?").join(",")})`);
+    args.push(...categories);
+  }
   if (district_id) { conditions.push("district_id = ?"); args.push(district_id); }
   else if (region_id) { conditions.push("region_id = ?"); args.push(region_id); }
   else if (location) { conditions.push("location LIKE ?"); args.push(`%${location}%`); }

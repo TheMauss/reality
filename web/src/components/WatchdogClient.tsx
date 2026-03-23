@@ -57,7 +57,7 @@ interface SearchResult {
 
 interface WatchdogForm {
   name: string;
-  category: string;
+  categories: string[];
   location: string;
   locationLabel: string;
   district_id: number | null;
@@ -83,9 +83,18 @@ interface WatchdogForm {
 
 const LAYOUTS = ["garsonka", "1+kk", "1+1", "2+kk", "2+1", "3+kk", "3+1", "4+kk", "4+1", "5+kk"];
 
+const CATEGORIES = [
+  { value: "byty-prodej",    label: "Byty",   sub: "prodej",   color: "#818CF8" },
+  { value: "byty-najem",     label: "Byty",   sub: "nájem",    color: "#10B981" },
+  { value: "domy-prodej",    label: "Domy",   sub: "prodej",   color: "#F97316" },
+  { value: "domy-najem",     label: "Domy",   sub: "nájem",    color: "#F59E0B" },
+  { value: "pozemky-prodej", label: "Pozemky", sub: "prodej",  color: "#84CC16" },
+  { value: "komercni-prodej",label: "Komerční", sub: "prodej", color: "#EC4899" },
+];
+
 const EMPTY_FORM: WatchdogForm = {
   name: "",
-  category: "",
+  categories: [],
   location: "",
   locationLabel: "",
   district_id: null,
@@ -109,15 +118,6 @@ const EMPTY_FORM: WatchdogForm = {
   notify_frequency: "instant",
 };
 
-const CATEGORIES = [
-  { value: "", label: "Vše" },
-  { value: "byty-prodej", label: "Byty - prodej" },
-  { value: "byty-najem", label: "Byty - pronájem" },
-  { value: "domy-prodej", label: "Domy - prodej" },
-  { value: "domy-najem", label: "Domy - pronájem" },
-  { value: "pozemky-prodej", label: "Pozemky" },
-  { value: "komercni-prodej", label: "Komerční" },
-];
 
 const MATCH_LABELS: Record<string, { label: string; color: string }> = {
   new: { label: "Nový", color: "text-green-400" },
@@ -353,7 +353,7 @@ export default function WatchdogClient() {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            category: f.category || null,
+            categories: f.categories.length ? f.categories : null,
             district_id: f.district_id,
             region_id: f.region_id,
             location: f.location || null,
@@ -377,7 +377,7 @@ export default function WatchdogClient() {
     e.preventDefault();
     const body = {
       name: form.name,
-      category: form.category || null,
+      category: form.categories.length ? JSON.stringify(form.categories) : null,
       location: form.location || null,
       district_id: form.district_id,
       region_id: form.region_id,
@@ -422,9 +422,10 @@ export default function WatchdogClient() {
   function handleEdit(wd: Watchdog & { layout?: string | null; price_m2_min?: number | null; price_m2_max?: number | null }) {
     const kw = wd.keywords ? (() => { try { return JSON.parse(wd.keywords!); } catch { return []; } })() : [];
     const ly = wd.layout ? (() => { try { return JSON.parse(wd.layout!); } catch { return []; } })() : [];
+    const cats = wd.category ? (() => { try { const p = JSON.parse(wd.category!); return Array.isArray(p) ? p : [wd.category!]; } catch { return wd.category ? [wd.category] : []; } })() : [];
     setForm({
       name: wd.name,
-      category: wd.category || "",
+      categories: cats,
       location: wd.location || "",
       locationLabel: wd.location || "",
       district_id: wd.district_id,
@@ -611,17 +612,38 @@ export default function WatchdogClient() {
             </div>
 
             {/* Filters */}
-            <div>
-              <label className="text-xs font-semibold text-muted uppercase tracking-wider">Filtry</label>
-              <div className="mt-1.5 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                <div>
-                  <select value={form.category} onChange={e => { const f = { ...form, category: e.target.value }; setForm(f); triggerPreview(f); }}
-                    className="w-full rounded-xl border border-border bg-background px-3.5 py-2.5 text-sm outline-none focus:border-accent transition-colors">
-                    {CATEGORIES.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
-                  </select>
+            <div className="space-y-4">
+              {/* Category multi-select */}
+              <div>
+                <label className="text-xs font-semibold text-muted uppercase tracking-wider">Typ <span className="font-normal text-muted/50">(prázdné = vše)</span></label>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {CATEGORIES.map(c => {
+                    const active = form.categories.includes(c.value);
+                    return (
+                      <button key={c.value} type="button"
+                        onClick={() => {
+                          const categories = active
+                            ? form.categories.filter(x => x !== c.value)
+                            : [...form.categories, c.value];
+                          const f = { ...form, categories };
+                          setForm(f); triggerPreview(f);
+                        }}
+                        className={`flex items-center gap-1.5 rounded-xl border px-3 py-1.5 text-xs font-semibold transition-all ${
+                          active ? "border-transparent text-white" : "border-border text-muted hover:text-foreground hover:border-border-light"
+                        }`}
+                        style={active ? { background: c.color, borderColor: c.color } : {}}>
+                        <span>{c.label}</span>
+                        <span className={`text-[10px] font-normal ${active ? "text-white/70" : "text-muted/60"}`}>{c.sub}</span>
+                      </button>
+                    );
+                  })}
                 </div>
+              </div>
 
-                <div className="sm:col-span-2">
+              {/* Location */}
+              <div>
+                <label className="text-xs font-semibold text-muted uppercase tracking-wider">Lokalita</label>
+                <div className="mt-2">
                   <LocationSearch value={form.locationLabel} onSelect={handleLocationSelect} onClear={handleLocationClear} />
                   {form.avg_price_m2 && (
                     <div className="mt-2 flex items-center gap-2 rounded-lg border border-amber-500/20 bg-amber-500/5 px-3 py-1.5">
@@ -633,34 +655,27 @@ export default function WatchdogClient() {
                     </div>
                   )}
                 </div>
+              </div>
 
-                <input type="number" value={form.price_min} onChange={e => { const f = { ...form, price_min: e.target.value }; setForm(f); triggerPreview(f); }}
-                  placeholder="Cena od (Kč)"
-                  className="rounded-xl border border-border bg-background px-3.5 py-2.5 text-sm outline-none focus:border-accent transition-colors" />
-                <input type="number" value={form.price_max} onChange={e => { const f = { ...form, price_max: e.target.value }; setForm(f); triggerPreview(f); }}
-                  placeholder="Cena do (Kč)"
-                  className="rounded-xl border border-border bg-background px-3.5 py-2.5 text-sm outline-none focus:border-accent transition-colors" />
-
-                <div className="flex gap-2">
+              {/* Price & Area & Price/m² */}
+              <div>
+                <label className="text-xs font-semibold text-muted uppercase tracking-wider">Cena &amp; plocha</label>
+                <div className="mt-2 grid grid-cols-2 sm:grid-cols-4 gap-2">
+                  <input type="number" value={form.price_min} onChange={e => { const f = { ...form, price_min: e.target.value }; setForm(f); triggerPreview(f); }}
+                    placeholder="Cena od" className="rounded-xl border border-border bg-background px-3 py-2 text-sm outline-none focus:border-accent transition-colors" />
+                  <input type="number" value={form.price_max} onChange={e => { const f = { ...form, price_max: e.target.value }; setForm(f); triggerPreview(f); }}
+                    placeholder="Cena do" className="rounded-xl border border-border bg-background px-3 py-2 text-sm outline-none focus:border-accent transition-colors" />
                   <input type="number" value={form.area_min} onChange={e => { const f = { ...form, area_min: e.target.value }; setForm(f); triggerPreview(f); }}
-                    placeholder="m² od"
-                    className="w-full rounded-xl border border-border bg-background px-3.5 py-2.5 text-sm outline-none focus:border-accent transition-colors" />
+                    placeholder="m² od" className="rounded-xl border border-border bg-background px-3 py-2 text-sm outline-none focus:border-accent transition-colors" />
                   <input type="number" value={form.area_max} onChange={e => { const f = { ...form, area_max: e.target.value }; setForm(f); triggerPreview(f); }}
-                    placeholder="m² do"
-                    className="w-full rounded-xl border border-border bg-background px-3.5 py-2.5 text-sm outline-none focus:border-accent transition-colors" />
-                </div>
-
-                <input type="text" value={form.keywords} onChange={e => { const f = { ...form, keywords: e.target.value }; setForm(f); triggerPreview(f); }}
-                  placeholder="Klíčová slova: balkon, garáž…"
-                  className="sm:col-span-2 rounded-xl border border-border bg-background px-3.5 py-2.5 text-sm outline-none focus:border-accent transition-colors" />
-
-                <div className="sm:col-span-2 lg:col-span-3 flex gap-2">
+                    placeholder="m² do" className="rounded-xl border border-border bg-background px-3 py-2 text-sm outline-none focus:border-accent transition-colors" />
                   <input type="number" value={form.price_m2_min} onChange={e => { const f = { ...form, price_m2_min: e.target.value }; setForm(f); triggerPreview(f); }}
-                    placeholder="Kč/m² od"
-                    className="flex-1 rounded-xl border border-border bg-background px-3.5 py-2.5 text-sm outline-none focus:border-accent transition-colors" />
+                    placeholder="Kč/m² od" className="rounded-xl border border-border bg-background px-3 py-2 text-sm outline-none focus:border-accent transition-colors" />
                   <input type="number" value={form.price_m2_max} onChange={e => { const f = { ...form, price_m2_max: e.target.value }; setForm(f); triggerPreview(f); }}
-                    placeholder="Kč/m² do"
-                    className="flex-1 rounded-xl border border-border bg-background px-3.5 py-2.5 text-sm outline-none focus:border-accent transition-colors" />
+                    placeholder="Kč/m² do" className="rounded-xl border border-border bg-background px-3 py-2 text-sm outline-none focus:border-accent transition-colors" />
+                  <input type="text" value={form.keywords} onChange={e => { const f = { ...form, keywords: e.target.value }; setForm(f); triggerPreview(f); }}
+                    placeholder="Klíčová slova: balkon, garáž…"
+                    className="col-span-2 rounded-xl border border-border bg-background px-3 py-2 text-sm outline-none focus:border-accent transition-colors" />
                 </div>
               </div>
 
