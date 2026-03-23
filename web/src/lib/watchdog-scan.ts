@@ -84,18 +84,20 @@ export async function scanExistingListings(wd: WatchdogConfig): Promise<number> 
 
   if (filtered.length === 0) return 0;
 
-  // Insert in small batches to avoid Turso limits
+  // Remove any previous db_scan matches to avoid duplicates
+  await db.prepare(
+    `DELETE FROM watchdog_matches WHERE watchdog_id = ? AND match_detail LIKE '%db_scan%'`
+  ).run(wd.id);
+
+  // Insert in batches of 50 to stay within Turso limits
   const BATCH = 50;
-  let inserted = 0;
   for (let i = 0; i < filtered.length; i += BATCH) {
     const chunk = filtered.slice(i, i + BATCH);
-    const stmts = chunk.map(r => ({
-      sql: `INSERT OR IGNORE INTO watchdog_matches (watchdog_id, listing_id, match_type, match_detail) VALUES (?, ?, 'new', ?)`,
+    await db.batch(chunk.map(r => ({
+      sql: `INSERT INTO watchdog_matches (watchdog_id, listing_id, match_type, match_detail) VALUES (?, ?, 'new', ?)`,
       args: [wd.id, r.id, JSON.stringify({ price: r.price, area_m2: r.area_m2, location: r.location, source: "db_scan" })] as import("@libsql/client").InValue[],
-    }));
-    await db.batch(stmts);
-    inserted += chunk.length;
+    })));
   }
 
-  return inserted;
+  return filtered.length;
 }

@@ -928,10 +928,6 @@ export default function WatchdogClient() {
                       className="rounded-lg border border-border px-3 py-1.5 text-xs text-muted hover:text-foreground hover:border-accent/30 transition-colors">
                       Upravit
                     </button>
-                    <button id={`scan-btn-${wd.id}`} onClick={() => handleScan(wd.id)}
-                      className="rounded-lg border border-accent/20 px-3 py-1.5 text-xs text-accent-light hover:bg-accent/10 transition-colors">
-                      Prohledat DB
-                    </button>
                     <button onClick={() => handleToggle(wd.id)}
                       className={`rounded-lg border px-3 py-1.5 text-xs transition-colors ${wd.active ? "border-amber-500/30 text-amber-400 hover:bg-amber-500/10" : "border-green-500/30 text-green-400 hover:bg-green-500/10"}`}>
                       {wd.active ? "Pozastavit" : "Aktivovat"}
