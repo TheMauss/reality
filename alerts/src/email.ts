@@ -32,12 +32,12 @@ export async function sendDropEmail(to: string, drops: DropAlert[]) {
     .join("");
 
   await resend.emails.send({
-    from: "Bytolov <alerts@bytolov.cz>",
+    from: "Cenolov <alerts@cenolov.cz>",
     to,
     subject: `${drops.length} nových cenových pádů!`,
     html: `
       <div style="background:#000;color:#fff;padding:20px;font-family:sans-serif">
-        <h1 style="color:#ef4444">Bytolov Alert</h1>
+        <h1 style="color:#ef4444">Cenolov Alert</h1>
         <p>${drops.length} nemovitostí snížilo cenu:</p>
         <table style="width:100%;border-collapse:collapse;font-size:14px">
           <thead>

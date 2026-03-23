@@ -17,7 +17,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Bytolov – Agregátor nemovitostí a hlídací pes",
+  title: "Cenolov – Agregátor nemovitostí a hlídací pes",
   description: "Agregátor inzerátů z Sreality a Bezrealitky. Hlídejte ceny, sledujte propady a lovte nejlepší nabídky.",
 };
 
