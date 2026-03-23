@@ -269,8 +269,9 @@ export default function WatchdogClient() {
   const [matchesPage, setMatchesPage] = useState(1);
   const [matchesLoading, setMatchesLoading] = useState(false);
   const [telegramId, setTelegramId] = useState("");
+  const [telegramSavedId, setTelegramSavedId] = useState(""); // the value actually in DB
+  const [telegramEditing, setTelegramEditing] = useState(false);
   const [telegramSaving, setTelegramSaving] = useState(false);
-  const [telegramSaved, setTelegramSaved] = useState(false);
 
   const fetchWatchdogs = useCallback(async () => {
     setLoading(true);
@@ -286,7 +287,7 @@ export default function WatchdogClient() {
     if (status === "authenticated") {
       fetchWatchdogs();
       fetch("/api/user").then(r => r.json()).then(d => {
-        if (d.user?.telegram_id) setTelegramId(d.user.telegram_id);
+        if (d.user?.telegram_id) { setTelegramId(d.user.telegram_id); setTelegramSavedId(d.user.telegram_id); }
       }).catch(() => {});
     } else if (status !== "loading") {
       setLoading(false);
@@ -301,8 +302,23 @@ export default function WatchdogClient() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ telegram_id: telegramId }),
       });
-      setTelegramSaved(true);
-      setTimeout(() => setTelegramSaved(false), 2000);
+      setTelegramSavedId(telegramId);
+      setTelegramEditing(false);
+    } catch { /* ignore */ }
+    finally { setTelegramSaving(false); }
+  }
+
+  async function disconnectTelegram() {
+    setTelegramSaving(true);
+    try {
+      await fetch("/api/user", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ telegram_id: null }),
+      });
+      setTelegramId("");
+      setTelegramSavedId("");
+      setTelegramEditing(false);
     } catch { /* ignore */ }
     finally { setTelegramSaving(false); }
   }
@@ -461,30 +477,49 @@ export default function WatchdogClient() {
                 </svg>
                 <span className="text-sm font-semibold">Telegram notifikace</span>
               </div>
-              <p className="text-xs text-muted mb-3">
-                Napiš <span className="font-mono bg-background border border-border rounded px-1.5 py-0.5 text-foreground">@HlidaciPesBot</span> na Telegramu,
-                pošli <span className="font-mono bg-background border border-border rounded px-1.5 py-0.5 text-foreground">/start</span> a zkopíruj sem své Chat ID.
-              </p>
-              <div className="flex items-center gap-2">
-                <input
-                  type="text"
-                  value={telegramId}
-                  onChange={e => { setTelegramId(e.target.value); setTelegramSaved(false); }}
-                  placeholder="např. 123456789"
-                  className="w-48 rounded-xl border border-border bg-background px-3 py-2 text-sm outline-none focus:border-blue-400/60 transition-colors font-mono"
-                />
-                <button
-                  onClick={saveTelegramId}
-                  disabled={telegramSaving}
-                  className={`rounded-xl px-4 py-2 text-sm font-medium transition-all ${
-                    telegramSaved
-                      ? "border border-green-500/30 bg-green-500/10 text-green-400"
-                      : "border border-blue-400/30 bg-blue-400/10 text-blue-300 hover:bg-blue-400/20"
-                  }`}
-                >
-                  {telegramSaved ? "✓ Uloženo" : telegramSaving ? "Ukládám…" : "Uložit"}
-                </button>
-              </div>
+              {telegramSavedId && !telegramEditing ? (
+                <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 rounded-xl border border-green-500/30 bg-green-500/8 px-3 py-2">
+                    <span className="h-2 w-2 rounded-full bg-green-500" />
+                    <span className="text-sm font-medium text-green-400">Propojeno</span>
+                    <span className="font-mono text-xs text-muted">{telegramSavedId}</span>
+                  </div>
+                  <button onClick={() => setTelegramEditing(true)}
+                    className="rounded-xl border border-border px-3 py-2 text-xs text-muted hover:text-foreground transition-colors">
+                    Změnit
+                  </button>
+                  <button onClick={disconnectTelegram} disabled={telegramSaving}
+                    className="rounded-xl border border-red-500/20 px-3 py-2 text-xs text-red-400/70 hover:text-red-400 hover:border-red-500/40 transition-colors">
+                    Odpojit
+                  </button>
+                </div>
+              ) : (
+                <>
+                  <p className="text-xs text-muted mb-3">
+                    Napiš <span className="font-mono bg-background border border-border rounded px-1.5 py-0.5 text-foreground">@HlidaciPesBot</span> na Telegramu,
+                    pošli <span className="font-mono bg-background border border-border rounded px-1.5 py-0.5 text-foreground">/start</span> a zkopíruj sem své Chat ID.
+                  </p>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="text"
+                      value={telegramId}
+                      onChange={e => setTelegramId(e.target.value)}
+                      placeholder="např. 123456789"
+                      className="w-48 rounded-xl border border-border bg-background px-3 py-2 text-sm outline-none focus:border-blue-400/60 transition-colors font-mono"
+                    />
+                    <button onClick={saveTelegramId} disabled={telegramSaving || !telegramId.trim()}
+                      className="rounded-xl border border-blue-400/30 bg-blue-400/10 px-4 py-2 text-sm font-medium text-blue-300 hover:bg-blue-400/20 transition-all disabled:opacity-40">
+                      {telegramSaving ? "Ukládám…" : "Uložit"}
+                    </button>
+                    {telegramEditing && (
+                      <button onClick={() => { setTelegramEditing(false); setTelegramId(telegramSavedId); }}
+                        className="rounded-xl border border-border px-3 py-2 text-xs text-muted hover:text-foreground transition-colors">
+                        Zrušit
+                      </button>
+                    )}
+                  </div>
+                </>
+              )}
             </div>
             <div className="text-right shrink-0">
               <span className="text-xs text-muted">Email</span>
