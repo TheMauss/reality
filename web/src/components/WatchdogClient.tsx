@@ -114,7 +114,7 @@ const EMPTY_FORM: WatchdogForm = {
   watch_underpriced: false,
   watch_underpriced_pct: "15",
   watch_returned: false,
-  notify_telegram: false,
+  notify_telegram: true,
   notify_frequency: "instant",
 };
 
