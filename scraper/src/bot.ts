@@ -35,7 +35,7 @@ export function startBot(): void {
   bot.onText(/\/start/, (msg) => {
     const chatId = msg.chat.id;
     bot.sendMessage(chatId,
-      `Vítejte v CenovýPád botu!\n\n` +
+      `Vítejte v Bytolov botu!\n\n` +
       `Vaše Chat ID: \`${chatId}\`\n\n` +
       `Zkopírujte toto číslo do nastavení na webu *(Hlídací pes → Telegram Chat ID)* pro zapnutí notifikací.\n\n` +
       `*Příkazy:*\n` +
