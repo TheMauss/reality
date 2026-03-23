@@ -3,7 +3,7 @@
 const GQL_URL = "https://api.bezrealitky.cz/graphql/";
 
 const GQL_QUERY = `
-query ListAdverts($offerType: [OfferType], $estateType: [EstateType], $limit: Int, $offset: Int, $order: ResultOrder, $regionOsmIds: [Int]) {
+query ListAdverts($offerType: [OfferType], $estateType: [EstateType], $limit: Int, $offset: Int, $order: ResultOrder, $regionOsmIds: [ID]) {
   listAdverts(
     offerType: $offerType
     estateType: $estateType
