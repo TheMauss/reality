@@ -18,6 +18,11 @@ export async function POST(
 
   if (!row) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
-  const count = await scanExistingListings(db.client, row);
-  return NextResponse.json({ ok: true, count });
+  try {
+    const count = await scanExistingListings(db.client, row);
+    return NextResponse.json({ ok: true, count });
+  } catch (err) {
+    console.error("[SCAN ERROR]", err);
+    return NextResponse.json({ error: String(err) }, { status: 500 });
+  }
 }
