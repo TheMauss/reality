@@ -16,7 +16,7 @@ export async function POST(req: NextRequest) {
 
   const db = getDB();
 
-  const conditions: string[] = ["delisted = 0"];
+  const conditions: string[] = ["removed_at IS NULL"];
   const args: unknown[] = [];
 
   if (categories && Array.isArray(categories) && categories.length > 0) {

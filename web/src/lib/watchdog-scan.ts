@@ -37,7 +37,7 @@ interface ListingRow {
 export async function scanExistingListings(db: Client, wd: WatchdogConfig): Promise<number> {
   if (!wd.watch_new && !wd.watch_drops) return 0;
 
-  const conditions: string[] = ["delisted = 0"];
+  const conditions: string[] = ["removed_at IS NULL"];
   const args: InValue[] = [];
 
   // Category filter (JSON array or plain string)
