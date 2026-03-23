@@ -178,12 +178,12 @@ export default async function ListingPage({
               </div>
             ) : listing.url ? (
               <a
-                href={fixSrealityUrl(listing.url, listing.id, listing.title, listing.location, listing.category)}
+                href={listing.id.startsWith("bz_") ? listing.url : (fixSrealityUrl(listing.url, listing.id, listing.title, listing.location, listing.category) ?? listing.url)}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="rounded-lg bg-accent px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-accent-light"
               >
-                Zobrazit na Sreality ↗
+                {listing.id.startsWith("bz_") ? "Bezrealitky ↗" : "Sreality ↗"}
               </a>
             ) : null}
           </div>
