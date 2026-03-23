@@ -3,13 +3,14 @@
 const GQL_URL = "https://api.bezrealitky.cz/graphql/";
 
 const GQL_QUERY = `
-query ListAdverts($offerType: [OfferType], $estateType: [EstateType], $limit: Int, $offset: Int, $order: ResultOrder) {
+query ListAdverts($offerType: [OfferType], $estateType: [EstateType], $limit: Int, $offset: Int, $order: ResultOrder, $regionOsmIds: [Int]) {
   listAdverts(
     offerType: $offerType
     estateType: $estateType
     limit: $limit
     offset: $offset
     order: $order
+    regionOsmIds: $regionOsmIds
   ) {
     list {
       id
@@ -94,7 +95,7 @@ async function fetchGQL(
   offset: number,
   order?: string,
 ): Promise<{ list: GQLAdvert[]; totalCount: number }> {
-  const variables: Record<string, unknown> = { offerType: [offerType], estateType, limit, offset };
+  const variables: Record<string, unknown> = { offerType: [offerType], estateType, limit, offset, regionOsmIds: [51684] };
   if (order) variables.order = order;
 
   for (let attempt = 1; attempt <= 3; attempt++) {
