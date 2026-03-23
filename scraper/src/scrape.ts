@@ -213,7 +213,11 @@ export async function runScrape() {
           if (existingRow.location !== item.location) changes.push(["location", existingRow.location, item.location]);
           if (existingRow.area_m2 !== item.area_m2) changes.push(["area_m2", String(existingRow.area_m2), String(item.area_m2)]);
 
-          if (existingRow.removed_at) {
+          const priceChanged = existingRow.price !== item.price;
+          const returned = !!existingRow.removed_at;
+          const anythingChanged = changes.length > 0 || priceChanged || returned;
+
+          if (returned) {
             await tx.execute({
               sql: "INSERT INTO listing_changes (listing_id, field, old_value, new_value, detected_at) VALUES (?, ?, ?, ?, ?)",
               args: [item.id, "returned", existingRow.removed_at, null, now],
@@ -230,21 +234,25 @@ export async function runScrape() {
             changeCount++;
           }
 
-          await tx.execute({
-            sql: "UPDATE listings SET title = ?, url = ?, location = ?, area_m2 = ?, price = ?, last_seen_at = ?, removed_at = NULL, lat = ?, lon = ?, region_id = ?, district_id = ? WHERE id = ?",
-            args: [item.title, item.url, item.location, item.area_m2, item.price, now, item.lat, item.lon, item.region_id, item.district_id, item.id],
-          });
-          await tx.execute({
-            sql: "INSERT INTO listing_sources (listing_id, source, source_id, url, first_seen_at, last_seen_at, removed_at) VALUES (?, 'sreality', ?, ?, ?, ?, NULL) ON CONFLICT(source, source_id) DO UPDATE SET last_seen_at = excluded.last_seen_at, removed_at = NULL",
-            args: [item.id, item.id, item.url, now, now],
-          });
-          updatedCount++;
+          if (anythingChanged) {
+            await tx.execute({
+              sql: "UPDATE listings SET title = ?, url = ?, location = ?, area_m2 = ?, price = ?, last_seen_at = ?, removed_at = NULL, lat = ?, lon = ?, region_id = ?, district_id = ? WHERE id = ?",
+              args: [item.title, item.url, item.location, item.area_m2, item.price, now, item.lat, item.lon, item.region_id, item.district_id, item.id],
+            });
+            await tx.execute({
+              sql: "INSERT INTO listing_sources (listing_id, source, source_id, url, first_seen_at, last_seen_at, removed_at) VALUES (?, 'sreality', ?, ?, ?, ?, NULL) ON CONFLICT(source, source_id) DO UPDATE SET last_seen_at = excluded.last_seen_at, removed_at = NULL",
+              args: [item.id, item.id, item.url, now, now],
+            });
+            updatedCount++;
+          }
         }
 
-        await tx.execute({
-          sql: "INSERT INTO price_history (listing_id, price, recorded_at) VALUES (?, ?, ?)",
-          args: [item.id, item.price, now],
-        });
+        if (existingRow && existingRow.price !== item.price) {
+          await tx.execute({
+            sql: "INSERT INTO price_history (listing_id, price, recorded_at) VALUES (?, ?, ?)",
+            args: [item.id, item.price, now],
+          });
+        }
 
         if (existingRow && existingRow.price > item.price) {
           const dropPct = Math.round(((existingRow.price - item.price) / existingRow.price) * 10000) / 100;
@@ -334,23 +342,31 @@ export async function runFastScan() {
         events.newListings.push(item);
         newCount++;
       } else {
-        if (existingRow.removed_at) {
+        const priceChanged = existingRow.price !== item.price;
+        const returned = !!existingRow.removed_at;
+
+        if (returned) {
           events.returnedListings.push(item);
           returnedCount++;
         }
 
-        await tx.execute({
-          sql: "UPDATE listings SET title = ?, url = ?, location = ?, area_m2 = ?, dispozice = ?, price = ?, last_seen_at = ?, removed_at = NULL, lat = ?, lon = ?, region_id = ?, district_id = ? WHERE id = ?",
-          args: [item.title, item.url, item.location, item.area_m2, item.dispozice, item.price, now, item.lat, item.lon, item.region_id, item.district_id, item.id],
-        });
-        await tx.execute({
-          sql: "INSERT INTO listing_sources (listing_id, source, source_id, url, first_seen_at, last_seen_at, removed_at) VALUES (?, 'sreality', ?, ?, ?, ?, NULL) ON CONFLICT(source, source_id) DO UPDATE SET last_seen_at = excluded.last_seen_at, removed_at = NULL",
-          args: [item.id, item.id, item.url, now, now],
-        });
-        await tx.execute({
-          sql: "INSERT INTO price_history (listing_id, price, recorded_at) VALUES (?, ?, ?)",
-          args: [item.id, item.price, now],
-        });
+        if (priceChanged || returned) {
+          await tx.execute({
+            sql: "UPDATE listings SET title = ?, url = ?, location = ?, area_m2 = ?, dispozice = ?, price = ?, last_seen_at = ?, removed_at = NULL, lat = ?, lon = ?, region_id = ?, district_id = ? WHERE id = ?",
+            args: [item.title, item.url, item.location, item.area_m2, item.dispozice, item.price, now, item.lat, item.lon, item.region_id, item.district_id, item.id],
+          });
+          await tx.execute({
+            sql: "INSERT INTO listing_sources (listing_id, source, source_id, url, first_seen_at, last_seen_at, removed_at) VALUES (?, 'sreality', ?, ?, ?, ?, NULL) ON CONFLICT(source, source_id) DO UPDATE SET last_seen_at = excluded.last_seen_at, removed_at = NULL",
+            args: [item.id, item.id, item.url, now, now],
+          });
+          if (priceChanged) {
+            await tx.execute({
+              sql: "INSERT INTO price_history (listing_id, price, recorded_at) VALUES (?, ?, ?)",
+              args: [item.id, item.price, now],
+            });
+          }
+          updatedCount++;
+        }
 
         if (existingRow.price > item.price) {
           const dropPct = Math.round(((existingRow.price - item.price) / existingRow.price) * 10000) / 100;
@@ -362,7 +378,6 @@ export async function runFastScan() {
           dropCount++;
           console.log(`  DROP: ${item.title} ${existingRow.price} → ${item.price} (-${dropPct.toFixed(1)}%)`);
         }
-        updatedCount++;
       }
     }
 
