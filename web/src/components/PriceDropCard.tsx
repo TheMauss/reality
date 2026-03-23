@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { fixSrealityUrl } from "@/lib/sreality-url";
+import { useFavorites } from "@/components/FavoritesProvider";
 
 interface PriceDrop {
   id: number;
@@ -16,7 +17,11 @@ interface PriceDrop {
   location: string;
   category: string;
   area_m2: number | null;
+  sources_json?: string;
 }
+
+const SOURCE_LABEL: Record<string, string> = { sreality: "SR", bezrealitky: "BZ" };
+const SOURCE_NAME: Record<string, string> = { sreality: "Sreality", bezrealitky: "Bezrealitky" };
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -72,27 +77,10 @@ function useThumb(id: string) {
 }
 
 function useSaved(id: string) {
-  const [saved, setSaved] = useState(false);
-  useEffect(() => {
-    try {
-      const arr: string[] = JSON.parse(localStorage.getItem("saved_listings") || "[]");
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setSaved(arr.includes(id));
-    } catch { /**/ }
-  }, [id]);
-
-  function toggle(e: React.MouseEvent) {
-    e.preventDefault(); e.stopPropagation();
-    try {
-      const arr: string[] = JSON.parse(localStorage.getItem("saved_listings") || "[]");
-      const next = arr.includes(id) ? arr.filter(x => x !== id) : [...arr, id];
-      localStorage.setItem("saved_listings", JSON.stringify(next));
-      setSaved(next.includes(id));
-      window.dispatchEvent(new Event("storage"));
-    } catch { /**/ }
-  }
-
-  return { saved, toggle };
+  const { savedIds, toggle: toggleFav, isLoggedIn } = useFavorites();
+  const saved = savedIds.has(id);
+  const toggle = (e: React.MouseEvent) => toggleFav(id, e);
+  return { saved, toggle, isLoggedIn };
 }
 
 // ── Empty photo placeholder ───────────────────────────────────────────────────
@@ -111,12 +99,22 @@ function PhotoPlaceholder({ color }: { color: string }) {
 
 // ── Card ─────────────────────────────────────────────────────────────────────
 
-export default function PriceDropCard({ drop }: { drop: PriceDrop }) {
+function getDropSources(drop: PriceDrop): Array<{ source: string; url: string }> {
+  if (drop.sources_json) {
+    try { return JSON.parse(drop.sources_json); } catch { /* */ }
+  }
   const rawUrl = drop.listing_url || drop.url;
-  const srealityUrl = fixSrealityUrl(rawUrl, drop.listing_id, drop.title, drop.location, drop.category);
+  const isBR = drop.listing_id.startsWith("bz_");
+  const url = isBR ? rawUrl : fixSrealityUrl(rawUrl, drop.listing_id, drop.title, drop.location, drop.category);
+  if (!url) return [];
+  return [{ source: isBR ? "bezrealitky" : "sreality", url }];
+}
+
+export default function PriceDropCard({ drop }: { drop: PriceDrop }) {
+  const sources = getDropSources(drop);
   const cat = CAT[drop.category] ?? { label: drop.category, color: "#71717A" };
   const { ref, url: imgUrl } = useThumb(drop.listing_id);
-  const { saved, toggle } = useSaved(drop.listing_id);
+  const { saved, toggle, isLoggedIn } = useSaved(drop.listing_id);
   const saved_amount = drop.old_price - drop.new_price;
   const pct = drop.drop_pct;
   const isHot = pct >= 15;
@@ -220,12 +218,13 @@ export default function PriceDropCard({ drop }: { drop: PriceDrop }) {
               <polyline points="9 18 15 12 9 6"/>
             </svg>
           </a>
-          {srealityUrl && (
-            <a href={srealityUrl} target="_blank" rel="noopener noreferrer"
+          {sources.map(s => (
+            <a key={s.source} href={s.source === "sreality" ? (fixSrealityUrl(s.url, drop.listing_id, drop.title, drop.location, drop.category) ?? s.url) : s.url}
+              target="_blank" rel="noopener noreferrer"
               className="flex items-center gap-1 rounded-xl border border-border px-3 py-2 text-[11px] font-medium text-muted hover:text-foreground hover:border-border-light transition-colors">
-              ↗ Sreality
+              ↗ {SOURCE_NAME[s.source] ?? s.source}
             </a>
-          )}
+          ))}
         </div>
       </div>
     </div>

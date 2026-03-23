@@ -34,7 +34,9 @@ export async function GET(req: NextRequest) {
 
   const rows = await db
     .prepare(
-      `SELECT pd.*, l.price as current_price, l.url as listing_url, l.first_seen_at
+      `SELECT pd.*, l.price as current_price, l.url as listing_url, l.first_seen_at,
+        (SELECT json_group_array(json_object('source', source, 'url', url))
+         FROM listing_sources WHERE listing_id = l.id AND removed_at IS NULL) as sources_json
        FROM price_drops pd
        LEFT JOIN listings l ON l.id = pd.listing_id
        ${where}

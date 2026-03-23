@@ -2,6 +2,12 @@
 
 import { useEffect, useRef, useState } from "react";
 import { fixSrealityUrl } from "@/lib/sreality-url";
+import { useFavorites } from "@/components/FavoritesProvider";
+
+interface ListingSource {
+  source: string;
+  url: string;
+}
 
 interface Listing {
   id: string;
@@ -13,6 +19,45 @@ interface Listing {
   price: number;
   price_m2: number | null;
   first_seen_at: string;
+  sources_json?: string;
+}
+
+const SOURCE_LABEL: Record<string, string> = {
+  sreality: "SR",
+  bezrealitky: "BZ",
+};
+
+function parseSources(listing: Listing): ListingSource[] {
+  if (listing.sources_json) {
+    try {
+      return JSON.parse(listing.sources_json) as ListingSource[];
+    } catch { /* */ }
+  }
+  // Fallback: derive from listing URL
+  const isBR = listing.id.startsWith("bz_");
+  return [{ source: isBR ? "bezrealitky" : "sreality", url: listing.url }];
+}
+
+function SourceLinks({ listing, className }: { listing: Listing; className?: string }) {
+  const sources = parseSources(listing);
+  return (
+    <>
+      {sources.map((s) => {
+        const href = s.source === "sreality"
+          ? fixSrealityUrl(s.url, listing.id, listing.title, listing.location, listing.category)
+          : s.url;
+        if (!href) return null;
+        return (
+          <a key={s.source} href={href} target="_blank" rel="noopener noreferrer"
+            onClick={e => e.stopPropagation()}
+            title={s.source === "sreality" ? "Sreality.cz" : "Bezrealitky.cz"}
+            className={className}>
+            {SOURCE_LABEL[s.source] ?? "↗"}
+          </a>
+        );
+      })}
+    </>
+  );
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -71,33 +116,15 @@ function useThumb(id: string) {
 }
 
 function useSaved(id: string) {
-  const [saved, setSaved] = useState(false);
-  useEffect(() => {
-    try {
-      const arr: string[] = JSON.parse(localStorage.getItem("saved_listings") || "[]");
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setSaved(arr.includes(id));
-    } catch { /**/ }
-  }, [id]);
-
-  function toggle(e: React.MouseEvent) {
-    e.preventDefault(); e.stopPropagation();
-    try {
-      const arr: string[] = JSON.parse(localStorage.getItem("saved_listings") || "[]");
-      const next = arr.includes(id) ? arr.filter(x => x !== id) : [...arr, id];
-      localStorage.setItem("saved_listings", JSON.stringify(next));
-      setSaved(next.includes(id));
-      window.dispatchEvent(new Event("storage"));
-    } catch { /**/ }
-  }
-
-  return { saved, toggle };
+  const { savedIds, toggle: toggleFav, isLoggedIn } = useFavorites();
+  const saved = savedIds.has(id);
+  const toggle = (e: React.MouseEvent) => toggleFav(id, e);
+  return { saved, toggle, isLoggedIn };
 }
 
 // ── Compact card (map sidebar) ────────────────────────────────────────────────
 
 function CompactCard({ listing }: { listing: Listing }) {
-  const srealityUrl = fixSrealityUrl(listing.url, listing.id, listing.title, listing.location, listing.category);
   const cat = CAT[listing.category] ?? { label: listing.category, color: "#71717A" };
   const days = daysOn(listing.first_seen_at);
   const layout = parseLayout(listing.title);
@@ -165,13 +192,9 @@ function CompactCard({ listing }: { listing: Listing }) {
         </div>
       </div>
 
-      {srealityUrl && (
-        <a href={srealityUrl} target="_blank" rel="noopener noreferrer"
-          onClick={e => e.stopPropagation()}
-          className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
-          <span className="flex h-5 w-5 items-center justify-center rounded bg-black/60 text-[10px] text-white/70">↗</span>
-        </a>
-      )}
+      <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+        <SourceLinks listing={listing} className="flex h-5 min-w-[20px] items-center justify-center rounded bg-black/60 px-1 text-[9px] font-bold text-white/70 hover:text-white" />
+      </div>
     </div>
   );
 }
@@ -179,7 +202,6 @@ function CompactCard({ listing }: { listing: Listing }) {
 // ── Full card ─────────────────────────────────────────────────────────────────
 
 export default function ListingCard({ listing, compact = false }: { listing: Listing; compact?: boolean }) {
-  const srealityUrl = fixSrealityUrl(listing.url, listing.id, listing.title, listing.location, listing.category);
   const cat = CAT[listing.category] ?? { label: listing.category, color: "#71717A" };
   const days = daysOn(listing.first_seen_at);
   const layout = parseLayout(listing.title);
@@ -286,17 +308,7 @@ export default function ListingCard({ listing, compact = false }: { listing: Lis
             )}
           </div>
           <div className="flex items-center gap-1.5">
-            {srealityUrl && (
-              <a href={srealityUrl} target="_blank" rel="noopener noreferrer"
-                onClick={e => e.stopPropagation()}
-                className="flex h-7 w-7 items-center justify-center rounded-lg border border-border/60 text-muted transition-colors hover:border-border-light hover:text-foreground">
-                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                  <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
-                  <polyline points="15 3 21 3 21 9"/>
-                  <line x1="10" y1="14" x2="21" y2="3"/>
-                </svg>
-              </a>
-            )}
+            <SourceLinks listing={listing} className="flex h-7 min-w-[28px] items-center justify-center rounded-lg border border-border/60 px-1.5 text-[10px] font-bold text-muted transition-colors hover:border-border-light hover:text-foreground" />
             <a href={`/listing/${listing.id}`}
               className="rounded-xl bg-accent px-3.5 py-1.5 text-[11px] font-bold text-white transition-all hover:bg-accent-light hover:shadow-lg hover:shadow-accent/20">
               Detail →

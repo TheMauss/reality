@@ -77,9 +77,11 @@ export async function GET(req: NextRequest) {
 
   const rows = await db
     .prepare(
-      `SELECT *,
-        CASE WHEN area_m2 > 0 THEN ROUND(price * 1.0 / area_m2) ELSE NULL END as price_m2
-       FROM listings ${where}
+      `SELECT l.*,
+        CASE WHEN l.area_m2 > 0 THEN ROUND(l.price * 1.0 / l.area_m2) ELSE NULL END as price_m2,
+        (SELECT json_group_array(json_object('source', source, 'url', url))
+         FROM listing_sources WHERE listing_id = l.id AND removed_at IS NULL) as sources_json
+       FROM listings l ${where}
        ORDER BY ${orderBy}
        LIMIT ? OFFSET ?`
     )
