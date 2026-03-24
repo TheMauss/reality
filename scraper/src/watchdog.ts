@@ -183,17 +183,12 @@ export async function runWatchdog(client: Client, events: ScrapeEvents): Promise
     }
   }
 
-  // Insert all matches (skip duplicates)
+  // Insert all matches (skip duplicates via unique index)
   if (matches.length > 0) {
     const stmts = matches.map((m) => ({
-      sql: `INSERT INTO watchdog_matches (watchdog_id, listing_id, match_type, match_detail)
-            SELECT ?, ?, ?, ?
-            WHERE NOT EXISTS (
-              SELECT 1 FROM watchdog_matches
-              WHERE watchdog_id = ? AND listing_id = ? AND match_type = ?
-            )`,
-      args: [m.watchdog_id, m.listing_id, m.match_type, m.match_detail,
-             m.watchdog_id, m.listing_id, m.match_type] as any[],
+      sql: `INSERT OR IGNORE INTO watchdog_matches (watchdog_id, listing_id, match_type, match_detail)
+            VALUES (?, ?, ?, ?)`,
+      args: [m.watchdog_id, m.listing_id, m.match_type, m.match_detail] as any[],
     }));
     await client.batch(stmts, "write");
     console.log(`Watchdog: ${matches.length} matches for ${watchdogs.length} active watchdogs`);

@@ -125,6 +125,7 @@ const MIGRATION_SQLS = [
   "CREATE INDEX IF NOT EXISTS idx_listings_removed ON listings(removed_at)",
   "CREATE INDEX IF NOT EXISTS idx_listings_dispozice ON listings(dispozice)",
   "CREATE INDEX IF NOT EXISTS idx_listings_price ON listings(price)",
+  "CREATE UNIQUE INDEX IF NOT EXISTS idx_wm_dedup ON watchdog_matches(watchdog_id, listing_id, match_type)",
 ];
 
 async function initSchema(client: Client) {

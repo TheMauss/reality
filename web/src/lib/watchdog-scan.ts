@@ -79,7 +79,7 @@ export async function scanExistingListings(wd: WatchdogConfig): Promise<number> 
   }
 
   const rows = await db.prepare(
-    `SELECT id, title, url, location, price, area_m2, category, region_id, district_id, dispozice FROM listings WHERE ${conditions.join(" AND ")} ORDER BY first_seen_at DESC LIMIT 500`
+    `SELECT id, title, url, location, price, area_m2, category, region_id, district_id, dispozice FROM listings WHERE ${conditions.join(" AND ")} ORDER BY first_seen_at DESC LIMIT 200`
   ).all(...args) as unknown as ListingRow[];
 
   let filtered = rows;
@@ -111,14 +111,9 @@ export async function scanExistingListings(wd: WatchdogConfig): Promise<number> 
   if (wd.watch_new) {
     for (const r of filtered) {
       stmts.push({
-        sql: `INSERT INTO watchdog_matches (watchdog_id, listing_id, match_type, match_detail)
-              SELECT ?, ?, 'new', ?
-              WHERE NOT EXISTS (
-                SELECT 1 FROM watchdog_matches
-                WHERE watchdog_id = ? AND listing_id = ? AND match_type = 'new'
-              )`,
-        args: [wd.id, r.id, JSON.stringify({ price: r.price, area_m2: r.area_m2, location: r.location, source: "db_scan" }),
-               wd.id, r.id],
+        sql: `INSERT OR IGNORE INTO watchdog_matches (watchdog_id, listing_id, match_type, match_detail)
+              VALUES (?, ?, 'new', ?)`,
+        args: [wd.id, r.id, JSON.stringify({ price: r.price, area_m2: r.area_m2, location: r.location, source: "db_scan" })],
       });
     }
   }
@@ -126,12 +121,12 @@ export async function scanExistingListings(wd: WatchdogConfig): Promise<number> 
   // 'underpriced' matches
   if (wd.watch_underpriced) {
     const minPct = wd.watch_underpriced_pct || 15;
-    const avgCache = new Map<string, number | null>();
+    const avgMap = await loadAvgPrices(db, filtered);
 
     for (const r of filtered) {
       if (!r.area_m2 || r.area_m2 <= 0) continue;
 
-      const avgPriceM2 = await getCachedAvgPriceM2(db, r, avgCache);
+      const avgPriceM2 = lookupAvg(avgMap, r);
       if (avgPriceM2 === null) continue;
 
       const listingPriceM2 = r.price / r.area_m2;
@@ -139,12 +134,8 @@ export async function scanExistingListings(wd: WatchdogConfig): Promise<number> 
 
       if (diffPct >= minPct) {
         stmts.push({
-          sql: `INSERT INTO watchdog_matches (watchdog_id, listing_id, match_type, match_detail)
-                SELECT ?, ?, 'underpriced', ?
-                WHERE NOT EXISTS (
-                  SELECT 1 FROM watchdog_matches
-                  WHERE watchdog_id = ? AND listing_id = ? AND match_type = 'underpriced'
-                )`,
+          sql: `INSERT OR IGNORE INTO watchdog_matches (watchdog_id, listing_id, match_type, match_detail)
+              VALUES (?, ?, 'underpriced', ?)`,
           args: [wd.id, r.id, JSON.stringify({
                   avg_price_m2: Math.round(avgPriceM2),
                   listing_price_m2: Math.round(listingPriceM2),
@@ -152,8 +143,7 @@ export async function scanExistingListings(wd: WatchdogConfig): Promise<number> 
                   price: r.price,
                   area_m2: r.area_m2,
                   source: "db_scan",
-                }),
-                wd.id, r.id],
+                })],
         });
       }
     }
@@ -170,7 +160,7 @@ export async function scanExistingListings(wd: WatchdogConfig): Promise<number> 
   return stmts.length;
 }
 
-// --- Underpriced helpers (mirrors scraper/src/watchdog.ts logic) ---
+// --- Batch avg price loader (3 queries total instead of 3 per listing) ---
 
 function soldCategory(category: string): string {
   if (category.startsWith("domy")) return "domy";
@@ -179,56 +169,78 @@ function soldCategory(category: string): string {
 
 type DB = ReturnType<typeof getDB>;
 
-async function getAvgPriceM2(db: DB, listing: ListingRow): Promise<number | null> {
+interface AvgPriceMap {
+  // key: "ward_{district_id}_{wardName}_{cat}" or "district_{id}_{cat}" or "region_{id}_{cat}"
+  ward: Map<string, number>;
+  district: Map<string, number>;
+  region: Map<string, number>;
+}
+
+async function loadAvgPrices(db: DB, listings: ListingRow[]): Promise<AvgPriceMap> {
+  const result: AvgPriceMap = { ward: new Map(), district: new Map(), region: new Map() };
+
+  // Load all latest ward avg prices in one query
+  try {
+    const wardRows = await db.prepare(
+      `SELECT w.district_id, w.name, h.category, h.avg_price_m2
+       FROM sold_price_history h
+       JOIN sold_wards w ON w.id = h.entity_id
+       WHERE h.entity_type = 'ward'
+       GROUP BY w.district_id, w.name, h.category
+       HAVING (h.year * 100 + h.month) = MAX(h.year * 100 + h.month)`
+    ).all() as unknown as Array<{ district_id: number; name: string; category: string; avg_price_m2: number }>;
+    for (const r of wardRows) {
+      result.ward.set(`${r.district_id}_${r.name}_${r.category}`, r.avg_price_m2);
+    }
+  } catch { /* table might not exist */ }
+
+  // Load all latest district avg prices
+  try {
+    const distRows = await db.prepare(
+      `SELECT entity_id, category, avg_price_m2 FROM sold_price_history
+       WHERE entity_type = 'district'
+       GROUP BY entity_id, category
+       HAVING (year * 100 + month) = MAX(year * 100 + month)`
+    ).all() as unknown as Array<{ entity_id: number; category: string; avg_price_m2: number }>;
+    for (const r of distRows) {
+      result.district.set(`${r.entity_id}_${r.category}`, r.avg_price_m2);
+    }
+  } catch { /* */ }
+
+  // Load all latest region avg prices
+  try {
+    const regRows = await db.prepare(
+      `SELECT entity_id, category, avg_price_m2 FROM sold_price_history
+       WHERE entity_type = 'region'
+       GROUP BY entity_id, category
+       HAVING (year * 100 + month) = MAX(year * 100 + month)`
+    ).all() as unknown as Array<{ entity_id: number; category: string; avg_price_m2: number }>;
+    for (const r of regRows) {
+      result.region.set(`${r.entity_id}_${r.category}`, r.avg_price_m2);
+    }
+  } catch { /* */ }
+
+  return result;
+}
+
+function lookupAvg(avgMap: AvgPriceMap, listing: ListingRow): number | null {
   const cat = soldCategory(listing.category);
 
   // 1. Ward
   if (listing.district_id && listing.location) {
     const wardName = listing.location.split(",")[0].trim();
-    const row = await db.prepare(
-      `SELECT h.avg_price_m2
-       FROM sold_price_history h
-       JOIN sold_wards w ON w.id = h.entity_id
-       WHERE h.entity_type = 'ward' AND h.category = ?
-         AND w.district_id = ? AND w.name = ?
-       ORDER BY h.year * 100 + h.month DESC LIMIT 1`
-    ).get(cat, listing.district_id, wardName) as unknown as { avg_price_m2: number } | undefined;
-    if (row?.avg_price_m2) return row.avg_price_m2;
+    const v = avgMap.ward.get(`${listing.district_id}_${wardName}_${cat}`);
+    if (v) return v;
   }
-
   // 2. District
   if (listing.district_id) {
-    const row = await db.prepare(
-      `SELECT avg_price_m2 FROM sold_price_history
-       WHERE entity_type = 'district' AND entity_id = ? AND category = ?
-       ORDER BY year * 100 + month DESC LIMIT 1`
-    ).get(listing.district_id, cat) as unknown as { avg_price_m2: number } | undefined;
-    if (row?.avg_price_m2) return row.avg_price_m2;
+    const v = avgMap.district.get(`${listing.district_id}_${cat}`);
+    if (v) return v;
   }
-
   // 3. Region
   if (listing.region_id) {
-    const row = await db.prepare(
-      `SELECT avg_price_m2 FROM sold_price_history
-       WHERE entity_type = 'region' AND entity_id = ? AND category = ?
-       ORDER BY year * 100 + month DESC LIMIT 1`
-    ).get(listing.region_id, cat) as unknown as { avg_price_m2: number } | undefined;
-    if (row?.avg_price_m2) return row.avg_price_m2;
+    const v = avgMap.region.get(`${listing.region_id}_${cat}`);
+    if (v) return v;
   }
-
   return null;
-}
-
-async function getCachedAvgPriceM2(
-  db: DB,
-  listing: ListingRow,
-  cache: Map<string, number | null>,
-): Promise<number | null> {
-  const wardName = listing.location ? listing.location.split(",")[0].trim() : "";
-  const cat = soldCategory(listing.category);
-  const key = `${cat}_${wardName}_${listing.district_id ?? "x"}_${listing.region_id ?? "x"}`;
-  if (cache.has(key)) return cache.get(key)!;
-  const result = await getAvgPriceM2(db, listing);
-  cache.set(key, result);
-  return result;
 }
