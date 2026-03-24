@@ -68,12 +68,19 @@ export async function runWatchdog(client: Client, events: ScrapeEvents): Promise
   if (watchdogs.length === 0) return 0;
 
   const matches: WatchdogMatchInsert[] = [];
+  const avgPriceCache = new Map<string, number | null>();
+
+  // Helper: get avg for a listing (cached)
+  async function avgFor(listing: ParsedListing): Promise<number | null> {
+    return getCachedLocalAvgPriceM2(client, listing, avgPriceCache);
+  }
 
   // Check new listings
   const newWatchdogs = watchdogs.filter((w) => w.watch_new);
   for (const listing of events.newListings) {
     for (const wd of newWatchdogs) {
       if (matchesFilter(listing, wd)) {
+        const avg = await avgFor(listing);
         matches.push({
           watchdog_id: wd.id,
           listing_id: listing.id,
@@ -82,6 +89,7 @@ export async function runWatchdog(client: Client, events: ScrapeEvents): Promise
             price: listing.price,
             area_m2: listing.area_m2,
             location: listing.location,
+            avg_price_m2: avg ? Math.round(avg) : null,
           }),
         });
       }
@@ -96,6 +104,7 @@ export async function runWatchdog(client: Client, events: ScrapeEvents): Promise
         drop.dropPct >= (wd.watch_drops_min_pct || 0) &&
         matchesFilter(drop.listing, wd)
       ) {
+        const avg = await avgFor(drop.listing);
         matches.push({
           watchdog_id: wd.id,
           listing_id: drop.listing.id,
@@ -104,6 +113,7 @@ export async function runWatchdog(client: Client, events: ScrapeEvents): Promise
             old_price: drop.oldPrice,
             new_price: drop.newPrice,
             drop_pct: drop.dropPct,
+            avg_price_m2: avg ? Math.round(avg) : null,
           }),
         });
       }
@@ -115,6 +125,7 @@ export async function runWatchdog(client: Client, events: ScrapeEvents): Promise
   for (const listing of events.returnedListings) {
     for (const wd of returnedWatchdogs) {
       if (matchesFilter(listing, wd)) {
+        const avg = await avgFor(listing);
         matches.push({
           watchdog_id: wd.id,
           listing_id: listing.id,
@@ -122,6 +133,7 @@ export async function runWatchdog(client: Client, events: ScrapeEvents): Promise
           match_detail: JSON.stringify({
             price: listing.price,
             location: listing.location,
+            avg_price_m2: avg ? Math.round(avg) : null,
           }),
         });
       }
@@ -135,8 +147,6 @@ export async function runWatchdog(client: Client, events: ScrapeEvents): Promise
       ...events.newListings,
       ...events.priceDrops.map((d) => d.listing),
     ];
-
-    const avgPriceCache = new Map<string, number | null>();
 
     for (const listing of allRelevant) {
       if (!listing.area_m2 || listing.area_m2 <= 0) continue;

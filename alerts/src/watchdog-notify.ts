@@ -228,11 +228,11 @@ async function sendWatchdogTelegram(chatId: string, watchdogName: string, matche
         info = ` <b>-${detail.drop_pct?.toFixed(1)}%</b>`;
       } else if (m.match_type === "underpriced") {
         info = ` <b>${detail.diff_pct?.toFixed(1)}% pod průměrem</b>`;
-        if (detail.avg_price_m2) {
-          info += `\n   📊 Průměr: ${Math.round(detail.avg_price_m2).toLocaleString("cs-CZ")} Kč/m² vs ${Math.round(detail.listing_price_m2).toLocaleString("cs-CZ")} Kč/m²`;
-        }
       }
-      const priceLine = priceM2 ? `${priceStr} Kč (${priceM2})` : `${priceStr} Kč`;
+      const avgStr = detail.avg_price_m2
+        ? ` · ø ${Math.round(detail.avg_price_m2).toLocaleString("cs-CZ")} Kč/m²`
+        : "";
+      const priceLine = priceM2 ? `${priceStr} Kč (${priceM2}${avgStr})` : `${priceStr} Kč`;
       const link = m.url ? `\n   🔗 <a href="${m.url}">Detail</a>` : "";
       return `${emoji} ${title}${info}\n   📍 ${loc} | ${priceLine}${link}`;
     });
