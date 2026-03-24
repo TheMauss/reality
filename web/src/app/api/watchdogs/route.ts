@@ -84,10 +84,15 @@ export async function POST(req: NextRequest) {
 
   const watchdog = await db.prepare("SELECT * FROM watchdogs WHERE id = ?").get(result.lastInsertRowid!) as any;
 
-  // Auto-scan existing listings for new watchdog (fire and forget)
+  // Scan existing listings before responding so results are immediately visible
+  let scanCount = 0;
   if (watchdog) {
-    scanExistingListings(watchdog).catch(() => {});
+    try {
+      scanCount = await scanExistingListings(watchdog);
+    } catch (e) {
+      console.error("[SCAN ERROR]", e);
+    }
   }
 
-  return NextResponse.json({ watchdog }, { status: 201 });
+  return NextResponse.json({ watchdog, scan_count: scanCount }, { status: 201 });
 }
