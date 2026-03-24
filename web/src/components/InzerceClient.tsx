@@ -169,7 +169,7 @@ function CompactSearch({ location }: { location?: string }) {
       </div>
 
       {open && results.length > 0 && (
-        <div className="absolute top-full left-0 z-[100] mt-1.5 w-72 overflow-hidden rounded-xl border border-border bg-card shadow-2xl shadow-black/50">
+        <div className="absolute top-full left-0 z-[2000] mt-1.5 w-72 overflow-hidden rounded-xl border border-border bg-card shadow-2xl shadow-black/50">
           {results.slice(0, 6).map((r, i) => (
             <button
               key={`${r.label}-${i}`}
@@ -241,7 +241,7 @@ function ToolbarDropdown({ label, active, children, onClear }: {
         )}
       </button>
       {open && (
-        <div className="absolute left-0 top-full z-[100] mt-1.5 min-w-[220px] overflow-hidden rounded-xl border border-border bg-card shadow-2xl shadow-black/50">
+        <div className="absolute left-0 top-full z-[2000] mt-1.5 min-w-[220px] overflow-hidden rounded-xl border border-border bg-card shadow-2xl shadow-black/50">
           {children}
         </div>
       )}
@@ -659,21 +659,33 @@ export default function InzerceClient({ listings, total, pages, currentPage, sp,
             <ToolbarDropdown label={priceLabel} active={priceActive} onClear={() => updateFilters({ min_price: "", max_price: "" })}>
               <div className="p-3 space-y-2">
                 <div className="flex gap-2 items-center">
-                  <input type="number" placeholder="Min" defaultValue={sp.min_price}
+                  <input type="number" placeholder="Od" defaultValue={sp.min_price}
                     onKeyDown={e => { if (e.key === "Enter") { const v = (e.target as HTMLInputElement).value; updateFilters({ min_price: v }); } }}
                     className="w-24 rounded-lg border border-border bg-background px-2.5 py-1.5 text-sm outline-none focus:border-accent/50" />
                   <span className="text-muted text-xs">–</span>
-                  <input type="number" placeholder="Max" defaultValue={sp.max_price}
+                  <input type="number" placeholder="Do" defaultValue={sp.max_price}
                     onKeyDown={e => { if (e.key === "Enter") { const v = (e.target as HTMLInputElement).value; updateFilters({ max_price: v }); } }}
                     className="w-24 rounded-lg border border-border bg-background px-2.5 py-1.5 text-sm outline-none focus:border-accent/50" />
                 </div>
                 <div className="grid grid-cols-2 gap-1.5">
-                  {[
-                    { label: "do 2 M", min: "", max: "2000000" },
-                    { label: "do 5 M", min: "", max: "5000000" },
-                    { label: "do 10 M", min: "", max: "10000000" },
-                    { label: "10 M+", min: "10000000", max: "" },
-                  ].map(q => (
+                  {((sp.category || "").includes("najem")
+                    ? [
+                        { label: "do 10 tis.", min: "", max: "10000" },
+                        { label: "do 15 tis.", min: "", max: "15000" },
+                        { label: "do 20 tis.", min: "", max: "20000" },
+                        { label: "do 30 tis.", min: "", max: "30000" },
+                        { label: "30–50 tis.", min: "30000", max: "50000" },
+                        { label: "50 tis.+", min: "50000", max: "" },
+                      ]
+                    : [
+                        { label: "do 2 M", min: "", max: "2000000" },
+                        { label: "do 5 M", min: "", max: "5000000" },
+                        { label: "do 10 M", min: "", max: "10000000" },
+                        { label: "5–10 M", min: "5000000", max: "10000000" },
+                        { label: "10–20 M", min: "10000000", max: "20000000" },
+                        { label: "20 M+", min: "20000000", max: "" },
+                      ]
+                  ).map(q => (
                     <button key={q.label} onClick={() => updateFilters({ min_price: q.min, max_price: q.max })}
                       className="rounded-lg border border-border bg-background px-2 py-1.5 text-xs text-muted hover:border-accent/30 hover:text-foreground transition-colors">
                       {q.label}

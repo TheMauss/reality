@@ -195,25 +195,25 @@ async function fetchPage(
 
   const url = `${BASE_URL}?${params}`;
 
-  for (let attempt = 1; attempt <= 3; attempt++) {
+  for (let attempt = 1; attempt <= 5; attempt++) {
     const res = await fetch(url, {
       headers: {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
         Accept: "application/json",
         "Accept-Language": "cs-CZ,cs;q=0.9",
       },
     });
 
     if (res.status === 429) {
-      const waitMs = 3000 * Math.pow(2, attempt);
-      console.warn(`    ⚠ Rate limited, waiting ${waitMs / 1000}s...`);
+      const waitMs = 5000 * Math.pow(2, attempt);
+      console.warn(`    ⚠ Rate limited (attempt ${attempt}/5), waiting ${waitMs / 1000}s...`);
       await delay(waitMs);
       continue;
     }
 
     if (!res.ok) {
-      if (attempt < 3) {
-        await delay(1000 * attempt);
+      if (attempt < 5) {
+        await delay(2000 * attempt);
         continue;
       }
       throw new Error(`Sreality API error: ${res.status} ${res.statusText}`);
@@ -259,7 +259,7 @@ async function scrapeBucket(
   let hasMore = firstEstates.length === PER_PAGE;
 
   while (hasMore && page <= MAX_PAGES) {
-    await delay(350);
+    await delay(500);
     const data = await fetchPage(config.main, config.type, regionId, page, config.sub, districtId, priceFrom, priceTo);
     const estates = data._embedded?.estates || [];
     if (estates.length === 0) break;
@@ -334,21 +334,25 @@ export async function scrapeAllListings(
       console.log(`\n=== District: ${district.name} (id=${district.id}, region=${region?.name}) ===`);
 
       for (const config of SEARCH_CONFIGS) {
-        const subLabel = config.sub ? ` sub=${config.sub}` : "";
-        const estates = await scrapeBucket(config, district.region_id, district.id, 0, PRICE_MAX, 0);
+        try {
+          const subLabel = config.sub ? ` sub=${config.sub}` : "";
+          const estates = await scrapeBucket(config, district.region_id, district.id, 0, PRICE_MAX, 0);
 
-        let count = 0;
-        for (const estate of estates) {
-          if (!estate.price || estate.price <= 1) continue;
-          const eid = estate.hash_id.toString();
-          if (seenIds.has(eid)) continue;
-          seenIds.add(eid);
-          allListings.push(parseListing(estate, config, district.region_id, district.id, district.name));
-          count++;
-        }
+          let count = 0;
+          for (const estate of estates) {
+            if (!estate.price || estate.price <= 1) continue;
+            const eid = estate.hash_id.toString();
+            if (seenIds.has(eid)) continue;
+            seenIds.add(eid);
+            allListings.push(parseListing(estate, config, district.region_id, district.id, district.name));
+            count++;
+          }
 
-        if (count > 0) {
-          console.log(`  ${config.label}${subLabel}: ${count}`);
+          if (count > 0) {
+            console.log(`  ${config.label}${subLabel}: ${count}`);
+          }
+        } catch (err) {
+          console.error(`  ERROR scraping ${config.label} district=${district.id}:`, err);
         }
       }
 
@@ -359,21 +363,25 @@ export async function scrapeAllListings(
       console.log(`\n=== Region: ${region.name} (id=${region.id}) ===`);
 
       for (const config of SEARCH_CONFIGS) {
-        const subLabel = config.sub ? ` sub=${config.sub}` : "";
-        const estates = await scrapeBucket(config, region.id, undefined, 0, PRICE_MAX, 0);
+        try {
+          const subLabel = config.sub ? ` sub=${config.sub}` : "";
+          const estates = await scrapeBucket(config, region.id, undefined, 0, PRICE_MAX, 0);
 
-        let count = 0;
-        for (const estate of estates) {
-          if (!estate.price || estate.price <= 1) continue;
-          const eid = estate.hash_id.toString();
-          if (seenIds.has(eid)) continue;
-          seenIds.add(eid);
-          allListings.push(parseListing(estate, config, region.id, null, region.name));
-          count++;
-        }
+          let count = 0;
+          for (const estate of estates) {
+            if (!estate.price || estate.price <= 1) continue;
+            const eid = estate.hash_id.toString();
+            if (seenIds.has(eid)) continue;
+            seenIds.add(eid);
+            allListings.push(parseListing(estate, config, region.id, null, region.name));
+            count++;
+          }
 
-        if (count > 0) {
-          console.log(`  ${config.label}${subLabel}: ${count}`);
+          if (count > 0) {
+            console.log(`  ${config.label}${subLabel}: ${count}`);
+          }
+        } catch (err) {
+          console.error(`  ERROR scraping ${config.label} region=${region.id}:`, err);
         }
       }
     }

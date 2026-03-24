@@ -3,6 +3,7 @@ import { getDB } from "@/lib/db";
 interface WatchdogConfig {
   id: number;
   category: string | null;
+  property_type: string | null;
   region_id: number | null;
   district_id: number | null;
   location: string | null;
@@ -24,6 +25,7 @@ interface ListingRow {
   location: string;
   price: number;
   area_m2: number | null;
+  dispozice: string | null;
 }
 
 /**
@@ -54,11 +56,21 @@ export async function scanExistingListings(wd: WatchdogConfig): Promise<number> 
   if (wd.price_max) { conditions.push("price <= ?"); args.push(wd.price_max); }
   if (wd.area_min) { conditions.push("area_m2 >= ?"); args.push(wd.area_min); }
   if (wd.area_max) { conditions.push("area_m2 <= ?"); args.push(wd.area_max); }
-  if (wd.price_m2_min) { conditions.push("price_m2 >= ?"); args.push(wd.price_m2_min); }
-  if (wd.price_m2_max) { conditions.push("price_m2 <= ?"); args.push(wd.price_m2_max); }
+  if (wd.price_m2_min) { conditions.push("area_m2 > 0 AND ROUND(price * 1.0 / area_m2) >= ?"); args.push(wd.price_m2_min); }
+  if (wd.price_m2_max) { conditions.push("area_m2 > 0 AND ROUND(price * 1.0 / area_m2) <= ?"); args.push(wd.price_m2_max); }
+
+  if (wd.property_type) {
+    try {
+      const types = JSON.parse(wd.property_type) as string[];
+      if (types.length > 0) {
+        conditions.push(`dispozice IN (${types.map(() => "?").join(",")})`);
+        args.push(...types);
+      }
+    } catch { /* */ }
+  }
 
   const rows = await db.prepare(
-    `SELECT id, title, url, location, price, area_m2 FROM listings WHERE ${conditions.join(" AND ")} ORDER BY first_seen_at DESC LIMIT 500`
+    `SELECT id, title, url, location, price, area_m2, dispozice FROM listings WHERE ${conditions.join(" AND ")} ORDER BY first_seen_at DESC LIMIT 500`
   ).all(...args) as unknown as ListingRow[];
 
   let filtered = rows;
@@ -84,20 +96,23 @@ export async function scanExistingListings(wd: WatchdogConfig): Promise<number> 
 
   if (filtered.length === 0) return 0;
 
-  // Remove any previous db_scan matches to avoid duplicates
-  await db.prepare(
-    `DELETE FROM watchdog_matches WHERE watchdog_id = ? AND match_detail LIKE '%db_scan%'`
-  ).run(wd.id);
-
-  // Insert in batches of 50 to stay within Turso limits
+  // Insert in batches of 50, skipping listings that already have a match for this watchdog
+  let inserted = 0;
   const BATCH = 50;
   for (let i = 0; i < filtered.length; i += BATCH) {
     const chunk = filtered.slice(i, i + BATCH);
     await db.batch(chunk.map(r => ({
-      sql: `INSERT INTO watchdog_matches (watchdog_id, listing_id, match_type, match_detail) VALUES (?, ?, 'new', ?)`,
-      args: [wd.id, r.id, JSON.stringify({ price: r.price, area_m2: r.area_m2, location: r.location, source: "db_scan" })] as import("@libsql/client").InValue[],
+      sql: `INSERT INTO watchdog_matches (watchdog_id, listing_id, match_type, match_detail)
+            SELECT ?, ?, 'new', ?
+            WHERE NOT EXISTS (
+              SELECT 1 FROM watchdog_matches
+              WHERE watchdog_id = ? AND listing_id = ? AND match_type = 'new'
+            )`,
+      args: [wd.id, r.id, JSON.stringify({ price: r.price, area_m2: r.area_m2, location: r.location, source: "db_scan" }),
+             wd.id, r.id] as import("@libsql/client").InValue[],
     })));
+    inserted += chunk.length;
   }
 
-  return filtered.length;
+  return inserted;
 }

@@ -74,7 +74,7 @@ function FilterDropdown({ label, active, children, onClear }: DropdownProps) {
       </button>
 
       {open && (
-        <div className="absolute left-0 top-full z-50 mt-1.5 min-w-[240px] overflow-hidden rounded-xl border border-border bg-card shadow-2xl shadow-black/50">
+        <div className="absolute left-0 top-full z-[300] mt-1.5 min-w-[240px] overflow-hidden rounded-xl border border-border bg-card shadow-2xl shadow-black/50">
           {children}
         </div>
       )}

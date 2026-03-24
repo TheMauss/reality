@@ -3,11 +3,12 @@ import ListingCard from "@/components/ListingCard";
 import ListingsFilters from "@/components/ListingsFilters";
 
 async function getListings(searchParams: Record<string, string>) {
+  const { baseUrl } = await import("@/lib/base-url");
+  const base = await baseUrl();
   const params = new URLSearchParams();
   for (const [key, val] of Object.entries(searchParams)) {
     if (val) params.set(key, val);
   }
-  const base = process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3000";
   const res = await fetch(`${base}/api/listings?${params}`, {
     cache: "no-store",
   });

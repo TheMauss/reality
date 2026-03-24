@@ -19,7 +19,8 @@ interface District {
 }
 
 async function fetchJSON(path: string) {
-  const base = process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3000";
+  const { baseUrl } = await import("@/lib/base-url");
+  const base = await baseUrl();
   const res = await fetch(`${base}${path}`, { cache: "no-store" });
   return res.json();
 }

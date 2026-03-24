@@ -10,6 +10,7 @@ interface Watchdog {
   name: string;
   active: number;
   category: string | null;
+  property_type: string | null;
   region_id: number | null;
   district_id: number | null;
   location: string | null;
@@ -58,6 +59,7 @@ interface SearchResult {
 interface WatchdogForm {
   name: string;
   categories: string[];
+  property_type: string[];
   location: string;
   locationLabel: string;
   district_id: number | null;
@@ -92,9 +94,19 @@ const CATEGORIES = [
   { value: "komercni-prodej",label: "Komerční", sub: "prodej", color: "#EC4899" },
 ];
 
+const PROPERTY_TYPES = [
+  { value: "rodinny",       label: "Rodinný dům" },
+  { value: "vila",           label: "Vila" },
+  { value: "na-klic",        label: "Na klíč" },
+  { value: "vicegeneracni",  label: "Vícegenerační" },
+  { value: "chalupa",        label: "Chalupa" },
+  { value: "chata",          label: "Chata" },
+];
+
 const EMPTY_FORM: WatchdogForm = {
   name: "",
   categories: [],
+  property_type: [],
   location: "",
   locationLabel: "",
   district_id: null,
@@ -354,6 +366,7 @@ export default function WatchdogClient() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             categories: f.categories.length ? f.categories : null,
+            property_type: f.property_type.length ? f.property_type : null,
             district_id: f.district_id,
             region_id: f.region_id,
             location: f.location || null,
@@ -378,6 +391,7 @@ export default function WatchdogClient() {
     const body = {
       name: form.name,
       category: form.categories.length ? JSON.stringify(form.categories) : null,
+      property_type: form.property_type.length ? form.property_type : null,
       location: form.location || null,
       district_id: form.district_id,
       region_id: form.region_id,
@@ -438,9 +452,11 @@ export default function WatchdogClient() {
     const kw = wd.keywords ? (() => { try { return JSON.parse(wd.keywords!); } catch { return []; } })() : [];
     const ly = wd.layout ? (() => { try { return JSON.parse(wd.layout!); } catch { return []; } })() : [];
     const cats = wd.category ? (() => { try { const p = JSON.parse(wd.category!); return Array.isArray(p) ? p : [wd.category!]; } catch { return wd.category ? [wd.category] : []; } })() : [];
+    const pt = wd.property_type ? (() => { try { const p = JSON.parse(wd.property_type!); return Array.isArray(p) ? p : []; } catch { return []; } })() : [];
     setForm({
       name: wd.name,
       categories: cats,
+      property_type: pt,
       location: wd.location || "",
       locationLabel: wd.location || "",
       district_id: wd.district_id,
@@ -640,7 +656,9 @@ export default function WatchdogClient() {
                           const categories = active
                             ? form.categories.filter(x => x !== c.value)
                             : [...form.categories, c.value];
-                          const f = { ...form, categories };
+                          const hasDomy = categories.some(cat => cat.startsWith("domy"));
+                          const property_type = hasDomy ? form.property_type : [];
+                          const f = { ...form, categories, property_type };
                           setForm(f); triggerPreview(f);
                         }}
                         className={`flex items-center gap-1.5 rounded-xl border px-3 py-1.5 text-xs font-semibold transition-all ${
@@ -654,6 +672,33 @@ export default function WatchdogClient() {
                   })}
                 </div>
               </div>
+
+              {/* Property sub-type (visible when domy category selected) */}
+              {form.categories.some(c => c.startsWith("domy")) && (
+                <div>
+                  <label className="text-xs font-semibold text-muted uppercase tracking-wider">Typ domu <span className="font-normal text-muted/50">(prázdné = vše)</span></label>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {PROPERTY_TYPES.map(pt => {
+                      const active = form.property_type.includes(pt.value);
+                      return (
+                        <button key={pt.value} type="button"
+                          onClick={() => {
+                            const property_type = active
+                              ? form.property_type.filter(x => x !== pt.value)
+                              : [...form.property_type, pt.value];
+                            const f = { ...form, property_type };
+                            setForm(f); triggerPreview(f);
+                          }}
+                          className={`rounded-xl border px-3 py-1.5 text-xs font-semibold transition-all ${
+                            active ? "border-orange-400 bg-orange-400/15 text-orange-300" : "border-border text-muted hover:text-foreground hover:border-border-light"
+                          }`}>
+                          {pt.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
 
               {/* Location */}
               <div>

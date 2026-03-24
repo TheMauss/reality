@@ -139,30 +139,17 @@ const CURATED: { label: string; sublabel: string; icon: string; type: string }[]
   { label: "Karlovarský kraj",   sublabel: "Karlovy Vary, Cheb",                 icon: "♨️",  type: "Kraj" },
 ];
 
-function TabIconHome() {
-  return <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>;
-}
-function TabIconHouseTree() {
-  return <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M9 22V12h6v10"/></svg>;
-}
-function TabIconKey() {
-  return <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="7.5" cy="15.5" r="5.5"/><path d="M21 2l-9.6 9.6M15.5 7.5l3 3"/></svg>;
-}
-function TabIconPlot() {
-  return <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>;
-}
-
 // Group tabs (top level)
 const GROUP_TABS = [
-  { label: "Nákup",    value: "nakup",    Icon: TabIconHome,  cats: ["byty-prodej", "domy-prodej"] },
-  { label: "Pronájem", value: "pronajem", Icon: TabIconKey,   cats: ["byty-najem",  "domy-najem"]  },
-  { label: "Pozemky",  value: "pozemky",  Icon: TabIconPlot,  cats: ["pozemky-prodej"]             },
+  { label: "Nákup",    value: "nakup",    cats: ["byty-prodej", "domy-prodej"] },
+  { label: "Pronájem", value: "pronajem", cats: ["byty-najem",  "domy-najem"]  },
+  { label: "Pozemky",  value: "pozemky",  cats: ["pozemky-prodej"]             },
 ];
 
 // Sub-tabs per group
-const SUB_TABS: Record<string, { label: string; value: string; Icon: () => React.JSX.Element }[]> = {
-  nakup:    [{ label: "Byty", value: "byty-prodej", Icon: TabIconHome }, { label: "Domy", value: "domy-prodej", Icon: TabIconHouseTree }],
-  pronajem: [{ label: "Byty", value: "byty-najem",  Icon: TabIconHome }, { label: "Domy", value: "domy-najem",  Icon: TabIconHouseTree }],
+const SUB_TABS: Record<string, { label: string; value: string }[]> = {
+  nakup:    [{ label: "Byty", value: "byty-prodej" }, { label: "Domy", value: "domy-prodej" }],
+  pronajem: [{ label: "Byty", value: "byty-najem"  }, { label: "Domy", value: "domy-najem"  }],
 };
 
 function getHeadline(category?: string): { main: string; highlight: string; sub: string } {
@@ -172,7 +159,7 @@ function getHeadline(category?: string): { main: string; highlight: string; sub:
     case "byty-najem":     return { main: "Najděte", highlight: "pronájem bytu", sub: "Krátkodobý i dlouhodobý pronájem v celé ČR" };
     case "domy-najem":     return { main: "Najděte", highlight: "dům k pronájmu",sub: "Rodinné domy a chalupy k pronájmu" };
     case "pozemky-prodej": return { main: "Najděte", highlight: "pozemek",       sub: "Stavební, zemědělské a komerční pozemky" };
-    default:               return { main: "Najděte svůj",highlight: "nový domov",sub: "Přes 100 000 inzerátů z celé ČR" };
+    default:               return { main: "Najděte svůj",highlight: "nový domov",sub: "Agregujeme data ze Sreality a Bezrealitky. Přes 100 000 inzerátů z celé ČR." };
   }
 }
 
@@ -206,6 +193,35 @@ function filterCurated(q: string): Suggestion[] {
   ).slice(0, 5);
 }
 
+function fmtPriceShort(val: string): string {
+  const n = Number(val);
+  if (isNaN(n)) return val;
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(n % 1_000_000 === 0 ? 0 : 1)} M`;
+  if (n >= 1_000) return `${Math.round(n / 1_000)} tis.`;
+  return `${n} Kč`;
+}
+
+function getPricePresets(category?: string): { label: string; min: string; max: string }[] {
+  if (category?.includes("najem")) {
+    return [
+      { label: "do 10 tis.", min: "", max: "10000" },
+      { label: "do 15 tis.", min: "", max: "15000" },
+      { label: "do 20 tis.", min: "", max: "20000" },
+      { label: "do 30 tis.", min: "", max: "30000" },
+      { label: "30–50 tis.", min: "30000", max: "50000" },
+      { label: "50 tis.+", min: "50000", max: "" },
+    ];
+  }
+  return [
+    { label: "do 2 M", min: "", max: "2000000" },
+    { label: "do 5 M", min: "", max: "5000000" },
+    { label: "do 10 M", min: "", max: "10000000" },
+    { label: "5–10 M", min: "5000000", max: "10000000" },
+    { label: "10–20 M", min: "10000000", max: "20000000" },
+    { label: "20 M+", min: "20000000", max: "" },
+  ];
+}
+
 export default function SearchHero({ activeCategory, activeLocation }: Props) {
   const router = useRouter();
   const inputRef = useRef<HTMLInputElement>(null);
@@ -222,8 +238,11 @@ export default function SearchHero({ activeCategory, activeLocation }: Props) {
   // Filter state
   const [selectedLayouts, setSelectedLayouts] = useState<string[]>([]);
   const [selectedPrice, setSelectedPrice] = useState<{ min: string; max: string }>({ min: "", max: "" });
+  const [selectedArea, setSelectedArea] = useState<{ min: string; max: string }>({ min: "", max: "" });
   const [priceDropOpen, setPriceDropOpen] = useState(false);
+  const [areaDropOpen, setAreaDropOpen] = useState(false);
   const priceRef = useRef<HTMLDivElement>(null);
+  const areaRef = useRef<HTMLDivElement>(null);
 
   // Derive active group and sub-categories from activeCategory
   const activeCats = activeCategory ? activeCategory.split(",").filter(Boolean) : [];
@@ -248,7 +267,6 @@ export default function SearchHero({ activeCategory, activeLocation }: Props) {
       setLoading(false);
       return;
     }
-    // Show curated instantly, load API in background
     setLoading(true);
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => {
@@ -270,6 +288,9 @@ export default function SearchHero({ activeCategory, activeLocation }: Props) {
       if (priceRef.current && !priceRef.current.contains(e.target as Node)) {
         setPriceDropOpen(false);
       }
+      if (areaRef.current && !areaRef.current.contains(e.target as Node)) {
+        setAreaDropOpen(false);
+      }
     }
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
@@ -286,6 +307,8 @@ export default function SearchHero({ activeCategory, activeLocation }: Props) {
     if (selectedLayouts.length > 0) params.set("layout", selectedLayouts.join(","));
     if (selectedPrice.min) params.set("min_price", selectedPrice.min);
     if (selectedPrice.max) params.set("max_price", selectedPrice.max);
+    if (selectedArea.min) params.set("min_area", selectedArea.min);
+    if (selectedArea.max) params.set("max_area", selectedArea.max);
     params.set("sort", "newest");
     return params;
   }
@@ -293,7 +316,6 @@ export default function SearchHero({ activeCategory, activeLocation }: Props) {
   function navigateGroup(groupValue: string) {
     const group = GROUP_TABS.find(g => g.value === groupValue);
     if (!group) return;
-    // If already fully active → clear
     const alreadyActive = group.cats.every(c => activeCats.includes(c));
     const newCat = alreadyActive ? "" : group.cats.join(",");
     router.push(`/inzerce?${buildParams(query.trim(), newCat).toString()}`);
@@ -314,7 +336,7 @@ export default function SearchHero({ activeCategory, activeLocation }: Props) {
     const params = buildParams(label);
     router.push(`/inzerce?${params.toString()}`);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeCategory, router, selectedLayouts, selectedPrice]);
+  }, [activeCategory, router, selectedLayouts, selectedPrice, selectedArea]);
 
   function submit(loc?: string) {
     const location = loc ?? query.trim();
@@ -357,32 +379,19 @@ export default function SearchHero({ activeCategory, activeLocation }: Props) {
   const showDropdown = open && (loading || suggestions.length > 0);
 
   return (
-    <div
-      className="relative rounded-2xl border border-border bg-gradient-to-br from-card via-card to-accent/5 px-6 py-14 md:px-12 md:py-20"
-    >
-      {/* Decorative blobs — clipped via mask so they don't escape rounded corner */}
-      <div
-        className="pointer-events-none absolute inset-0 rounded-2xl"
-        style={{ overflow: "hidden" }}
-        aria-hidden
-      >
-        <div className="absolute -right-24 -top-24 h-80 w-80 rounded-full bg-accent/8 blur-3xl" />
-        <div className="absolute -bottom-16 left-1/3 h-56 w-56 rounded-full bg-purple-600/6 blur-2xl" />
-        <div className="absolute top-1/2 -left-20 h-48 w-48 rounded-full bg-accent/4 blur-2xl" />
-      </div>
+    <section className="relative rounded-lg border border-border bg-surface-1" style={{ zIndex: 20 }}>
+      {/* Background accent glow */}
+      <div className="pointer-events-none absolute inset-y-0 right-0 w-1/2 bg-gradient-to-l from-accent/[0.03] to-transparent" />
 
-      {/* Content */}
-      <div className="relative max-w-3xl mx-auto">
+      <div className="relative px-8 py-14 md:px-14 md:py-20 max-w-3xl mx-auto">
 
         {/* Headline */}
         <div className="text-center mb-8">
-          <h1 className="text-5xl font-extrabold tracking-tight leading-tight md:text-6xl">
+          <h1 className="text-3xl md:text-4xl font-semibold tracking-tight text-foreground leading-[1.15]">
             {headline.main}{" "}
-            <span className="bg-gradient-to-r from-accent-light via-purple-400 to-pink-400 bg-clip-text text-transparent">
-              {headline.highlight}
-            </span>
+            <span className="text-gradient">{headline.highlight}</span>
           </h1>
-          <p className="mt-3 text-base text-muted md:text-lg">{headline.sub}</p>
+          <p className="mt-3 text-[15px] text-text-secondary leading-relaxed">{headline.sub}</p>
         </div>
 
         {/* Group tabs (Nákup / Pronájem / Pozemky) */}
@@ -395,20 +404,19 @@ export default function SearchHero({ activeCategory, activeLocation }: Props) {
                 key={group.value}
                 type="button"
                 onClick={() => navigateGroup(group.value)}
-                className={`flex items-center gap-1.5 rounded-xl border px-4 py-2 text-sm font-semibold transition-all ${
+                className={`rounded-md border px-4 py-2 text-[13px] font-medium transition-all ${
                   fullyActive || partlyActive
-                    ? "border-accent/50 bg-accent/15 text-accent-light shadow-sm shadow-accent/10"
-                    : "border-border bg-card/60 text-muted hover:border-accent/30 hover:text-foreground hover:bg-card/80"
+                    ? "border-accent bg-accent/10 text-accent-light"
+                    : "border-border bg-surface-2 text-text-secondary hover:border-border-hover hover:text-foreground"
                 }`}
               >
-                <group.Icon />
                 {group.label}
               </button>
             );
           })}
         </div>
 
-        {/* Sub-tabs (Byty / Domy) — shown when a group with subs is active */}
+        {/* Sub-tabs (Byty / Domy) */}
         {subTabs && (
           <div className="flex justify-center gap-2 mb-4">
             {subTabs.map((sub) => {
@@ -418,13 +426,12 @@ export default function SearchHero({ activeCategory, activeLocation }: Props) {
                   key={sub.value}
                   type="button"
                   onClick={() => navigateSub(sub.value)}
-                  className={`flex items-center gap-1.5 rounded-lg border px-3.5 py-1.5 text-xs font-semibold transition-all ${
+                  className={`rounded-md border px-3.5 py-1.5 text-[12px] font-medium transition-all ${
                     active
                       ? "border-accent/40 bg-accent/10 text-accent-light"
-                      : "border-border/60 bg-card/40 text-muted/70 hover:border-accent/30 hover:text-foreground"
+                      : "border-border bg-surface-2 text-text-tertiary hover:border-border-hover hover:text-foreground"
                   }`}
                 >
-                  <sub.Icon />
                   {sub.label}
                 </button>
               );
@@ -432,22 +439,22 @@ export default function SearchHero({ activeCategory, activeLocation }: Props) {
           </div>
         )}
 
-        {/* ── Quick filters ──────────────────────────────────── */}
+        {/* Quick filters */}
         <div className="flex flex-wrap items-center justify-center gap-2 mb-6">
-          {/* Dispozice pills — multi-select */}
+          {/* Layout pills */}
           <div className="flex items-center gap-1.5">
-            <span className="text-xs font-semibold text-muted mr-1">Dispozice</span>
-            {["1+kk", "2+kk", "3+kk", "3+1", "4+kk", "5+"].map((l) => (
+            <span className="text-[11px] font-medium text-text-tertiary mr-1">Dispozice</span>
+            {["Garsonka", "1+kk", "2+kk", "2+1", "3+kk", "3+1", "4+kk", "5+"].map((l) => (
               <button
                 key={l}
                 type="button"
                 onClick={() => setSelectedLayouts(prev =>
                   prev.includes(l) ? prev.filter(x => x !== l) : [...prev, l]
                 )}
-                className={`rounded-lg border px-3 py-1.5 text-xs font-semibold transition-all ${
+                className={`rounded-md border px-2.5 py-1 text-[12px] font-medium transition-all ${
                   selectedLayouts.includes(l)
-                    ? "border-accent/50 bg-accent/15 text-accent-light shadow-sm shadow-accent/10"
-                    : "border-border bg-card/60 text-muted hover:border-accent/30 hover:text-foreground"
+                    ? "border-accent bg-accent/10 text-accent-light"
+                    : "border-border bg-surface-2 text-text-tertiary hover:border-border-hover hover:text-foreground"
                 }`}
               >
                 {l}
@@ -455,23 +462,23 @@ export default function SearchHero({ activeCategory, activeLocation }: Props) {
             ))}
           </div>
 
-          <div className="h-5 w-px bg-border/40 mx-1" />
+          <div className="h-4 w-px bg-border mx-1" />
 
           {/* Price dropdown */}
           <div ref={priceRef} className="relative">
             <button
               type="button"
-              onClick={() => setPriceDropOpen((o) => !o)}
-              className={`flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-semibold transition-all ${
+              onClick={() => { setPriceDropOpen((o) => !o); setAreaDropOpen(false); }}
+              className={`flex items-center gap-1.5 rounded-md border px-3 py-1 text-[12px] font-medium transition-all ${
                 selectedPrice.min || selectedPrice.max
-                  ? "border-accent/50 bg-accent/15 text-accent-light shadow-sm shadow-accent/10"
-                  : "border-border bg-card/60 text-muted hover:border-accent/30 hover:text-foreground"
+                  ? "border-accent bg-accent/10 text-accent-light"
+                  : "border-border bg-surface-2 text-text-tertiary hover:border-border-hover hover:text-foreground"
               }`}
             >
               {selectedPrice.min || selectedPrice.max
                 ? [
-                    selectedPrice.min && `od ${Number(selectedPrice.min) >= 1_000_000 ? `${(Number(selectedPrice.min) / 1_000_000).toFixed(0)} M` : `${Math.round(Number(selectedPrice.min) / 1_000)} tis.`}`,
-                    selectedPrice.max && `do ${Number(selectedPrice.max) >= 1_000_000 ? `${(Number(selectedPrice.max) / 1_000_000).toFixed(0)} M` : `${Math.round(Number(selectedPrice.max) / 1_000)} tis.`}`,
+                    selectedPrice.min && `od ${fmtPriceShort(selectedPrice.min)}`,
+                    selectedPrice.max && `do ${fmtPriceShort(selectedPrice.max)}`,
                   ].filter(Boolean).join(" ")
                 : "Cena"}
               {selectedPrice.min || selectedPrice.max ? (
@@ -492,50 +499,159 @@ export default function SearchHero({ activeCategory, activeLocation }: Props) {
               )}
             </button>
             {priceDropOpen && (
-              <div className="absolute left-1/2 -translate-x-1/2 top-full z-[200] mt-2 w-56 overflow-hidden rounded-xl border border-border bg-card shadow-2xl shadow-black/60">
-                <div className="p-3 space-y-2">
-                  <div className="text-[10px] font-bold uppercase tracking-widest text-muted">Cenový rozsah</div>
+              <div className="absolute left-1/2 -translate-x-1/2 top-full z-[300] mt-2 w-64 overflow-hidden rounded-lg border border-border bg-surface-1 shadow-2xl shadow-black/60">
+                <div className="p-3 space-y-3">
+                  <div className="text-[10px] font-medium uppercase tracking-widest text-text-tertiary">Cenový rozsah</div>
+                  {/* Custom min/max inputs */}
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="number"
+                      placeholder="Od"
+                      value={selectedPrice.min}
+                      onChange={(e) => setSelectedPrice(p => ({ ...p, min: e.target.value }))}
+                      className="flex-1 rounded-md border border-border bg-surface-2 px-2.5 py-1.5 text-[12px] text-foreground placeholder:text-text-tertiary outline-none focus:border-accent"
+                    />
+                    <span className="text-text-tertiary text-[11px]">–</span>
+                    <input
+                      type="number"
+                      placeholder="Do"
+                      value={selectedPrice.max}
+                      onChange={(e) => setSelectedPrice(p => ({ ...p, max: e.target.value }))}
+                      className="flex-1 rounded-md border border-border bg-surface-2 px-2.5 py-1.5 text-[12px] text-foreground placeholder:text-text-tertiary outline-none focus:border-accent"
+                    />
+                  </div>
+                  {/* Presets — adapt to category */}
                   <div className="grid grid-cols-2 gap-1.5">
-                    {[
-                      { label: "do 2 M", min: "", max: "2000000" },
-                      { label: "do 5 M", min: "", max: "5000000" },
-                      { label: "do 10 M", min: "", max: "10000000" },
-                      { label: "5–10 M", min: "5000000", max: "10000000" },
-                      { label: "10–20 M", min: "10000000", max: "20000000" },
-                      { label: "20 M+", min: "20000000", max: "" },
-                    ].map((q) => (
+                    {getPricePresets(activeCategory).map((q) => (
                       <button
                         key={q.label}
                         type="button"
                         onClick={() => { setSelectedPrice({ min: q.min, max: q.max }); setPriceDropOpen(false); }}
-                        className={`rounded-lg border px-2.5 py-2 text-xs font-medium transition-colors ${
+                        className={`rounded-md border px-2.5 py-1.5 text-[11px] font-medium transition-colors ${
                           selectedPrice.min === q.min && selectedPrice.max === q.max
-                            ? "border-accent/50 bg-accent/15 text-accent-light"
-                            : "border-border bg-background text-muted hover:border-accent/30 hover:text-foreground"
+                            ? "border-accent bg-accent/10 text-accent-light"
+                            : "border-border bg-surface-2 text-text-tertiary hover:border-border-hover hover:text-foreground"
                         }`}
                       >
                         {q.label}
                       </button>
                     ))}
                   </div>
+                  {/* Apply button */}
+                  <button
+                    type="button"
+                    onClick={() => setPriceDropOpen(false)}
+                    className="w-full rounded-md bg-accent py-1.5 text-[12px] font-medium text-white hover:bg-accent-light transition-colors"
+                  >
+                    Použít
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Area dropdown */}
+          <div ref={areaRef} className="relative">
+            <button
+              type="button"
+              onClick={() => { setAreaDropOpen((o) => !o); setPriceDropOpen(false); }}
+              className={`flex items-center gap-1.5 rounded-md border px-3 py-1 text-[12px] font-medium transition-all ${
+                selectedArea.min || selectedArea.max
+                  ? "border-accent bg-accent/10 text-accent-light"
+                  : "border-border bg-surface-2 text-text-tertiary hover:border-border-hover hover:text-foreground"
+              }`}
+            >
+              {selectedArea.min || selectedArea.max
+                ? [
+                    selectedArea.min && `od ${selectedArea.min} m²`,
+                    selectedArea.max && `do ${selectedArea.max} m²`,
+                  ].filter(Boolean).join(" ")
+                : "Plocha"}
+              {selectedArea.min || selectedArea.max ? (
+                <span
+                  role="button"
+                  onClick={(e) => { e.stopPropagation(); setSelectedArea({ min: "", max: "" }); setAreaDropOpen(false); }}
+                  className="flex h-4 w-4 items-center justify-center rounded-full bg-accent/20 text-accent-light hover:bg-accent/40"
+                >
+                  <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
+                    <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+                  </svg>
+                </span>
+              ) : (
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"
+                  className={`transition-transform ${areaDropOpen ? "rotate-180" : ""}`}>
+                  <polyline points="6 9 12 15 18 9"/>
+                </svg>
+              )}
+            </button>
+            {areaDropOpen && (
+              <div className="absolute left-1/2 -translate-x-1/2 top-full z-[300] mt-2 w-64 overflow-hidden rounded-lg border border-border bg-surface-1 shadow-2xl shadow-black/60">
+                <div className="p-3 space-y-3">
+                  <div className="text-[10px] font-medium uppercase tracking-widest text-text-tertiary">Plocha (m²)</div>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="number"
+                      placeholder="Od m²"
+                      value={selectedArea.min}
+                      onChange={(e) => setSelectedArea(p => ({ ...p, min: e.target.value }))}
+                      className="flex-1 rounded-md border border-border bg-surface-2 px-2.5 py-1.5 text-[12px] text-foreground placeholder:text-text-tertiary outline-none focus:border-accent"
+                    />
+                    <span className="text-text-tertiary text-[11px]">–</span>
+                    <input
+                      type="number"
+                      placeholder="Do m²"
+                      value={selectedArea.max}
+                      onChange={(e) => setSelectedArea(p => ({ ...p, max: e.target.value }))}
+                      className="flex-1 rounded-md border border-border bg-surface-2 px-2.5 py-1.5 text-[12px] text-foreground placeholder:text-text-tertiary outline-none focus:border-accent"
+                    />
+                  </div>
+                  <div className="grid grid-cols-3 gap-1.5">
+                    {[
+                      { label: "do 40 m²", min: "", max: "40" },
+                      { label: "40–60", min: "40", max: "60" },
+                      { label: "60–80", min: "60", max: "80" },
+                      { label: "80–120", min: "80", max: "120" },
+                      { label: "120–200", min: "120", max: "200" },
+                      { label: "200+", min: "200", max: "" },
+                    ].map((q) => (
+                      <button
+                        key={q.label}
+                        type="button"
+                        onClick={() => { setSelectedArea({ min: q.min, max: q.max }); setAreaDropOpen(false); }}
+                        className={`rounded-md border px-2 py-1.5 text-[11px] font-medium transition-colors ${
+                          selectedArea.min === q.min && selectedArea.max === q.max
+                            ? "border-accent bg-accent/10 text-accent-light"
+                            : "border-border bg-surface-2 text-text-tertiary hover:border-border-hover hover:text-foreground"
+                        }`}
+                      >
+                        {q.label}
+                      </button>
+                    ))}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setAreaDropOpen(false)}
+                    className="w-full rounded-md bg-accent py-1.5 text-[12px] font-medium text-white hover:bg-accent-light transition-colors"
+                  >
+                    Použít
+                  </button>
                 </div>
               </div>
             )}
           </div>
         </div>
 
-        {/* Search + autocomplete — wrapper is NOT overflow-hidden so dropdown escapes */}
+        {/* Search + autocomplete */}
         <div ref={wrapperRef} className="relative">
-          <form onSubmit={handleSubmit} className="flex gap-0 rounded-2xl border border-border bg-background shadow-2xl shadow-black/40 focus-within:border-accent/50 focus-within:ring-2 focus-within:ring-accent/10 transition-all">
+          <form onSubmit={handleSubmit} className="flex gap-0 rounded-lg border border-border bg-background focus-within:border-accent focus-within:shadow-[0_0_0_3px_rgba(59,130,246,0.08)] transition-all">
             {/* Location icon */}
-            <div className="flex items-center pl-5 shrink-0 pointer-events-none">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-muted">
+            <div className="flex items-center pl-4 shrink-0 pointer-events-none">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-text-tertiary">
                 <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/>
                 <circle cx="12" cy="10" r="3"/>
               </svg>
             </div>
 
-            {/* Input */}
             <input
               ref={inputRef}
               type="text"
@@ -546,43 +662,40 @@ export default function SearchHero({ activeCategory, activeLocation }: Props) {
               placeholder="Město, část Prahy, PSČ…"
               autoComplete="off"
               spellCheck={false}
-              className="flex-1 bg-transparent py-5 pl-3 pr-4 text-base text-foreground placeholder:text-muted/40 outline-none"
+              className="flex-1 bg-transparent py-4 pl-3 pr-4 text-[14px] text-foreground placeholder:text-text-tertiary outline-none"
             />
 
-            {/* Clear button */}
+            {/* Clear */}
             {query && (
               <button
                 type="button"
                 onClick={() => { setQuery(""); setOpen(true); inputRef.current?.focus(); }}
-                className="flex items-center pr-3 text-muted hover:text-foreground transition-colors shrink-0"
+                className="flex items-center pr-3 text-text-tertiary hover:text-foreground transition-colors shrink-0"
               >
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                   <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
                 </svg>
               </button>
             )}
 
-            {/* Divider */}
-            <div className="self-stretch w-px bg-border/60 my-3 shrink-0" />
+            <div className="self-stretch w-px bg-border my-2.5 shrink-0" />
 
-            {/* Submit */}
             <button
               type="submit"
-              className="shrink-0 m-1.5 rounded-xl bg-accent px-7 py-3.5 text-sm font-bold text-white shadow-lg shadow-accent/20 transition-all hover:bg-accent-light active:scale-95"
+              className="shrink-0 m-1.5 rounded-md bg-accent px-6 py-3 text-[13px] font-medium text-white transition-all hover:bg-accent-light active:scale-95"
             >
               Hledat
             </button>
           </form>
 
-          {/* Dropdown — outside form, full z-index overlay */}
+          {/* Dropdown */}
           {showDropdown && (
             <div
               ref={dropdownRef}
-              className="absolute left-0 right-0 top-full z-[200] mt-2 overflow-hidden rounded-2xl border border-border bg-card shadow-2xl shadow-black/60"
+              className="absolute left-0 right-0 top-full z-[300] mt-2 overflow-hidden rounded-lg border border-border bg-surface-1 shadow-2xl shadow-black/60"
             >
-              {/* Header */}
-              <div className="flex items-center justify-between px-4 py-2.5 border-b border-border/60">
-                <span className="text-[10px] font-bold uppercase tracking-widest text-muted">
+              <div className="flex items-center justify-between px-4 py-2.5 border-b border-border">
+                <span className="text-[11px] font-medium text-text-tertiary uppercase tracking-wider">
                   {query.length === 0
                     ? "Populární lokality"
                     : loading
@@ -591,18 +704,18 @@ export default function SearchHero({ activeCategory, activeLocation }: Props) {
                     ? `${suggestions.length} míst nalezeno`
                     : "Žádné výsledky"}
                 </span>
-                <span className="text-[10px] text-muted/50 hidden sm:block">↑↓ pro výběr · Enter pro potvrzení</span>
+                <span className="text-[10px] text-text-tertiary hidden sm:block">↑↓ pro výběr · Enter pro potvrzení</span>
               </div>
 
-              {/* Loading indicator (subtle, only when no curated results yet) */}
+              {/* Loading skeleton */}
               {loading && suggestions.length === 0 && (
                 <div className="space-y-0">
                   {[1, 2, 3].map((n) => (
                     <div key={n} className="flex items-center gap-3 px-4 py-3">
-                      <div className="h-9 w-9 rounded-xl bg-card-hover animate-pulse shrink-0" />
+                      <div className="h-8 w-8 rounded-md bg-surface-3 animate-pulse shrink-0" />
                       <div className="flex-1 space-y-1.5">
-                        <div className="h-3.5 w-32 rounded bg-card-hover animate-pulse" />
-                        <div className="h-2.5 w-48 rounded bg-card-hover animate-pulse" />
+                        <div className="h-3 w-32 rounded bg-surface-3 animate-pulse" />
+                        <div className="h-2.5 w-48 rounded bg-surface-3 animate-pulse" />
                       </div>
                     </div>
                   ))}
@@ -616,54 +729,50 @@ export default function SearchHero({ activeCategory, activeLocation }: Props) {
                   type="button"
                   onMouseDown={(e) => { e.preventDefault(); pick(s.label); }}
                   onMouseEnter={() => setActiveIdx(i)}
-                  className={`flex w-full items-center gap-3 px-4 py-3 text-left transition-colors ${
-                    i === activeIdx ? "bg-accent/10" : "hover:bg-card-hover"
+                  className={`flex w-full items-center gap-3 px-4 py-2.5 text-left transition-colors ${
+                    i === activeIdx ? "bg-accent/10" : "hover:bg-surface-2"
                   }`}
                 >
-                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-border bg-background text-muted">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-border bg-surface-2 text-text-tertiary">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                       <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/>
                     </svg>
                   </div>
 
                   <div className="min-w-0 flex-1">
-                    <div className={`text-sm font-semibold leading-tight ${i === activeIdx ? "text-accent-light" : "text-foreground"}`}>
+                    <div className={`text-[13px] font-medium leading-tight ${i === activeIdx ? "text-accent-light" : "text-foreground"}`}>
                       {query.length > 0 ? highlightMatch(s.label, query) : s.label}
                     </div>
                     {s.sublabel && (
-                      <div className="text-xs text-muted truncate mt-0.5">{s.sublabel}</div>
+                      <div className="text-[11px] text-text-tertiary truncate mt-0.5">{s.sublabel}</div>
                     )}
                   </div>
 
-                  <span className="shrink-0 rounded-md bg-card-hover px-2 py-0.5 text-[10px] font-medium text-muted/70">
+                  <span className="shrink-0 rounded-md bg-surface-3 px-2 py-0.5 text-[10px] font-medium text-text-tertiary">
                     {s.type}
                   </span>
-
-                  <svg className={`ml-1 shrink-0 transition-colors ${i === activeIdx ? "text-accent-light" : "text-border"}`} width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                    <polyline points="9 18 15 12 9 6"/>
-                  </svg>
                 </button>
               ))}
 
               {/* No results */}
               {!loading && apiResults !== null && query.length >= 2 && suggestions.length === 0 && (
-                <div className="px-4 py-5 text-center text-sm text-muted">
+                <div className="px-4 py-5 text-center text-[13px] text-text-secondary">
                   Žádné místo nenalezeno — zkuste jiný název
                 </div>
               )}
 
-              {/* Footer: search as typed */}
+              {/* Footer */}
               {query.length > 0 && (
-                <div className="border-t border-border/60 px-4 py-2.5">
+                <div className="border-t border-border px-4 py-2.5">
                   <button
                     type="button"
                     onMouseDown={(e) => { e.preventDefault(); setOpen(false); submit(); }}
-                    className="flex items-center gap-2 text-xs text-muted hover:text-accent-light transition-colors"
+                    className="flex items-center gap-2 text-[12px] text-text-tertiary hover:text-accent-light transition-colors"
                   >
-                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                       <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
                     </svg>
-                    Hledat <span className="font-semibold text-foreground">&bdquo;{query}&ldquo;</span> ve všech inzerátech
+                    Hledat <span className="font-medium text-foreground">&bdquo;{query}&ldquo;</span> ve všech inzerátech
                   </button>
                 </div>
               )}
@@ -672,31 +781,27 @@ export default function SearchHero({ activeCategory, activeLocation }: Props) {
         </div>
 
         {/* Trust bar */}
-        <div className="mt-6 flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-xs text-muted">
+        <div className="mt-5 flex flex-wrap items-center justify-center gap-x-5 gap-y-2 text-[11px] text-text-tertiary">
           <span className="flex items-center gap-1.5">
             <span className="h-1.5 w-1.5 rounded-full bg-green animate-pulse" />
             Aktualizováno živě
           </span>
-          <span className="text-border">·</span>
           <span>Bez registrace zdarma</span>
-          <span className="text-border">·</span>
-          <span>Sledujeme propady cen v reálném čase</span>
-          <span className="text-border hidden md:block">·</span>
-          <span className="hidden md:block">Data z Sreality.cz + katastr</span>
+          <span className="hidden md:block">Data ze Sreality + Bezrealitky + katastr</span>
         </div>
       </div>
-    </div>
+    </section>
   );
 }
 
-// Highlight matching substring in bold
+// Highlight matching substring
 function highlightMatch(text: string, query: string): React.ReactNode {
   const idx = text.toLowerCase().indexOf(query.toLowerCase());
   if (idx === -1) return text;
   return (
     <>
       {text.slice(0, idx)}
-      <mark className="bg-accent/20 text-accent-light rounded px-0.5 font-bold not-italic">
+      <mark className="bg-accent/20 text-accent-light rounded px-0.5 font-semibold not-italic">
         {text.slice(idx, idx + query.length)}
       </mark>
       {text.slice(idx + query.length)}

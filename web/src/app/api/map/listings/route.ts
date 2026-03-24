@@ -35,8 +35,8 @@ export async function GET(req: NextRequest) {
   if (minArea)  { where += " AND area_m2 >= ?"; params.push(minArea); }
   if (maxArea)  { where += " AND area_m2 <= ?"; params.push(maxArea); }
   const layouts = layout ? layout.split(",").map(s => s.trim()).filter(Boolean) : [];
-  if (layouts.length === 1) { where += " AND title LIKE ?"; params.push(`%${layouts[0]}%`); }
-  else if (layouts.length > 1) { where += ` AND (${layouts.map(() => "title LIKE ?").join(" OR ")})`; params.push(...layouts.map(l => `%${l}%`)); }
+  if (layouts.length === 1) { where += " AND dispozice = ?"; params.push(layouts[0]); }
+  else if (layouts.length > 1) { where += ` AND dispozice IN (${layouts.map(() => "?").join(",")})`; params.push(...layouts); }
 
   const listings = await db
     .prepare(

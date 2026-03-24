@@ -1,4 +1,5 @@
 import { Suspense } from "react";
+import Link from "next/link";
 import InzerceClient from "@/components/InzerceClient";
 import SearchHero from "@/components/SearchHero";
 import NewestCard from "@/components/NewestCard";
@@ -15,21 +16,23 @@ interface Listing {
   thumb?: string | null;
 }
 
-const BASE = process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3000";
+import { baseUrl } from "@/lib/base-url";
 
 async function getListingsData(searchParams: Record<string, string>) {
+  const base = await baseUrl();
   const params = new URLSearchParams();
   for (const [key, val] of Object.entries(searchParams)) {
     if (val) params.set(key, val);
   }
-  const res = await fetch(`${BASE}/api/listings?${params}`, { cache: "no-store" });
+  const res = await fetch(`${base}/api/listings?${params}`, { cache: "no-store" });
   return res.json();
 }
 
 async function getNewest(category: string, limit = 6): Promise<Listing[]> {
+  const base = await baseUrl();
   const params = new URLSearchParams({ sort: "newest", page: "1" });
   if (category) params.set("category", category);
-  const res = await fetch(`${BASE}/api/listings?${params}`, { cache: "no-store" });
+  const res = await fetch(`${base}/api/listings?${params}`, { cache: "no-store" });
   const data = await res.json();
   return (data.listings || []).slice(0, limit);
 }
@@ -49,14 +52,12 @@ async function getNewestSections(category: string): Promise<NewestSection[]> {
   ];
 
   if (category) {
-    // Single category mode — one section, 6 items
     const label = CATEGORIES.find(c => c.cat === category)?.label ?? "Právě přidáno";
     const listings = await getNewest(category, 6);
     const thumbs = await Promise.all(listings.map((l: Listing) => fetchThumb(l.id)));
     return [{ label, category, listings: listings.map((l: Listing, i: number) => ({ ...l, thumb: thumbs[i] })) }];
   }
 
-  // No filter — show all 4 categories, 3 items each
   const sections = await Promise.all(
     CATEGORIES.map(async ({ cat, label }) => {
       const listings = await getNewest(cat, 3);
@@ -93,14 +94,14 @@ async function fetchThumb(id: string): Promise<string | null> {
 // ── Static data ──────────────────────────────────────────
 
 const HOT_PLACES = [
-  { label: "Praha",           sublabel: "Hlavní město",        emoji: "🏙️" },
-  { label: "Brno",            sublabel: "Jihomoravský kraj",   emoji: "🏛️" },
-  { label: "Ostrava",         sublabel: "Moravskoslezský kraj",emoji: "🏭" },
-  { label: "Plzeň",           sublabel: "Plzeňský kraj",       emoji: "🍺" },
-  { label: "Liberec",         sublabel: "Liberecký kraj",      emoji: "⛰️" },
-  { label: "Olomouc",         sublabel: "Olomoucký kraj",      emoji: "🏰" },
-  { label: "Hradec Králové",  sublabel: "Královéhradecký kraj",emoji: "👑" },
-  { label: "Zlín",            sublabel: "Zlínský kraj",        emoji: "🏔️" },
+  { label: "Praha",           sublabel: "Hlavní město" },
+  { label: "Brno",            sublabel: "Jihomoravský kraj" },
+  { label: "Ostrava",         sublabel: "Moravskoslezský kraj" },
+  { label: "Plzeň",           sublabel: "Plzeňský kraj" },
+  { label: "Liberec",         sublabel: "Liberecký kraj" },
+  { label: "Olomouc",         sublabel: "Olomoucký kraj" },
+  { label: "Hradec Králové",  sublabel: "Královéhradecký kraj" },
+  { label: "Zlín",            sublabel: "Zlínský kraj" },
 ];
 
 const PRAGUE_AREAS = [
@@ -115,60 +116,60 @@ function getMarketStats(category: string, total: number) {
       return {
         heading: "Trh bytů k prodeji",
         stats: [
-          { value: "148 000 Kč/m²", label: "Průměr Praha", sub: "byty · prodej" },
-          { value: "78 000 Kč/m²",  label: "Průměr ČR",    sub: "byty · prodej" },
-          { value: `${total.toLocaleString("cs-CZ")}`, label: "dostupných bytů", sub: "aktuálně" },
-          { value: "+4.2 %",        label: "Meziročně",     sub: "Praha" },
+          { value: "148 000 Kč/m²", label: "Průměr Praha" },
+          { value: "78 000 Kč/m²",  label: "Průměr ČR" },
+          { value: `${total.toLocaleString("cs-CZ")}`, label: "Dostupných bytů" },
+          { value: "+4.2 %",        label: "Meziročně Praha" },
         ],
       };
     case "byty-najem":
       return {
         heading: "Trh pronájmů bytů",
         stats: [
-          { value: "350 Kč/m²",    label: "Nájem Praha",   sub: "byty · pronájem" },
-          { value: "180 Kč/m²",    label: "Nájem ČR",      sub: "byty · pronájem" },
-          { value: `${total.toLocaleString("cs-CZ")}`, label: "nabídek pronájmu", sub: "aktuálně" },
-          { value: "Dnes",          label: "Aktualizováno", sub: "Sledujeme v reálném čase" },
+          { value: "350 Kč/m²",    label: "Nájem Praha" },
+          { value: "180 Kč/m²",    label: "Nájem ČR" },
+          { value: `${total.toLocaleString("cs-CZ")}`, label: "Nabídek pronájmu" },
+          { value: "Denně",         label: "Aktualizováno" },
         ],
       };
     case "domy-prodej":
       return {
         heading: "Trh domů k prodeji",
         stats: [
-          { value: "11.5 M Kč",    label: "Průměr Praha",  sub: "rodinné domy" },
-          { value: "5.2 M Kč",     label: "Průměr ČR",     sub: "rodinné domy" },
-          { value: `${total.toLocaleString("cs-CZ")}`, label: "domů k prodeji", sub: "aktuálně" },
-          { value: "+3.8 %",        label: "Meziročně",     sub: "Praha" },
+          { value: "11.5 M Kč",    label: "Průměr Praha" },
+          { value: "5.2 M Kč",     label: "Průměr ČR" },
+          { value: `${total.toLocaleString("cs-CZ")}`, label: "Domů k prodeji" },
+          { value: "+3.8 %",        label: "Meziročně Praha" },
         ],
       };
     case "domy-najem":
       return {
         heading: "Trh pronájmů domů",
         stats: [
-          { value: "45 000 Kč/měs", label: "Pronájem Praha", sub: "rodinné domy" },
-          { value: "22 000 Kč/měs", label: "Pronájem ČR",    sub: "rodinné domy" },
-          { value: `${total.toLocaleString("cs-CZ")}`, label: "domů k pronájmu", sub: "aktuálně" },
-          { value: "Rodinné domy",  label: "Kategorie",        sub: "Vily, chaty i chalupy" },
+          { value: "45 000 Kč/měs", label: "Pronájem Praha" },
+          { value: "22 000 Kč/měs", label: "Pronájem ČR" },
+          { value: `${total.toLocaleString("cs-CZ")}`, label: "Domů k pronájmu" },
+          { value: "Rodinné domy",  label: "Vily, chaty i chalupy" },
         ],
       };
     case "pozemky-prodej":
       return {
         heading: "Trh pozemků",
         stats: [
-          { value: "8 000 Kč/m²",  label: "Průměr Praha",  sub: "stavební pozemky" },
-          { value: "1 500 Kč/m²",  label: "Průměr ČR",     sub: "pozemky" },
-          { value: `${total.toLocaleString("cs-CZ")}`, label: "pozemků", sub: "aktuálně" },
-          { value: "Stavební + zemědělské", label: "Typy", sub: "Vše v jednom místě" },
+          { value: "8 000 Kč/m²",  label: "Průměr Praha" },
+          { value: "1 500 Kč/m²",  label: "Průměr ČR" },
+          { value: `${total.toLocaleString("cs-CZ")}`, label: "Pozemků" },
+          { value: "Stavební + zemědělské", label: "Typy" },
         ],
       };
     default:
       return {
         heading: "Trh v číslech",
         stats: [
-          { value: `${total.toLocaleString("cs-CZ")}`, label: "nemovitostí celkem", sub: "aktuálně" },
-          { value: "14 000+",       label: "cenových propadů",  sub: "sledujeme" },
-          { value: "Denně",         label: "Aktualizujeme",     sub: "Sreality.cz v reálném čase" },
-          { value: "6",             label: "kategorií",         sub: "byty, domy, pozemky…" },
+          { value: `${total.toLocaleString("cs-CZ")}`, label: "Nemovitostí celkem" },
+          { value: "14 000+",       label: "Cenových propadů" },
+          { value: "Denně",         label: "Aktualizujeme" },
+          { value: "6",             label: "Kategorií" },
         ],
       };
   }
@@ -231,65 +232,25 @@ function getGuides(category: string) {
       },
     ];
   }
-  if (category?.includes("prodej") || !category) {
-    return [
-      {
-        title: "Jak koupit byt krok za krokem",
-        desc: "Od prvního prohlídky po podpis kupní smlouvy. Kompletní průvodce pro kupující.",
-        cta: "/prodej",
-      },
-      {
-        title: "Jak financovat nemovitost",
-        desc: "Hypotéky, úrokové sazby, fixace a co vám banky neřeknou. Aktuální srovnání.",
-        cta: "/prodeje",
-      },
-      {
-        title: "Co zkontrolovat před koupí",
-        desc: "Katastr, věcná břemena, technický stav a skryté vady. Checklist pro kupující.",
-        cta: "/prodeje",
-      },
-    ];
-  }
   return [
     {
-      title: "Jak koupit nemovitost",
-      desc: "Průvodce celým procesem koupě od vyhledání po předání klíčů.",
-      cta: "/prodej",
-    },
-    {
-      title: "Jak financovat koupi",
-      desc: "Hypotéky a alternativní financování – aktuální srovnání bank.",
+      title: "Jak koupit byt krok za krokem",
+      desc: "Od první prohlídky po podpis kupní smlouvy. Kompletní průvodce pro kupující.",
       cta: "/prodeje",
     },
     {
-      title: "Kdy prodat nemovitost",
-      desc: "Analýza sezónnosti trhu a vliv úrokových sazeb na nabídku.",
+      title: "Jak financovat nemovitost",
+      desc: "Hypotéky, úrokové sazby, fixace a co vám banky neřeknou. Aktuální srovnání.",
+      cta: "/prodeje",
+    },
+    {
+      title: "Co zkontrolovat před koupí",
+      desc: "Katastr, věcná břemena, technický stav a skryté vady. Checklist pro kupující.",
       cta: "/prodeje",
     },
   ];
 }
 
-const GuideIconSearch = () => (
-  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-    <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
-  </svg>
-);
-const GuideIconDoc = () => (
-  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-    <polyline points="14 2 14 8 20 8"/>
-    <line x1="16" y1="13" x2="8" y2="13"/>
-    <line x1="16" y1="17" x2="8" y2="17"/>
-    <polyline points="10 9 9 9 8 9"/>
-  </svg>
-);
-const GuideIconKey = () => (
-  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-    <path d="m21 2-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0 3 3L22 7l-3-3m-3.5 3.5L19 4"/>
-  </svg>
-);
-
-const GUIDE_ICONS = [GuideIconSearch, GuideIconDoc, GuideIconKey];
 
 // ── Page ─────────────────────────────────────────────────
 
@@ -315,12 +276,12 @@ export default async function InzercePage({
   const popularSearches = getPopularSearches(cat);
   const guides = getGuides(cat);
 
-  // ── Compact results mode (after search / filter) ────────────────────────
+  // ── Compact results mode (after search / filter) ──
   if (hasFilter) {
     return (
       <Suspense
         fallback={
-          <div className="h-96 flex items-center justify-center text-muted text-sm">
+          <div className="h-96 flex items-center justify-center text-text-secondary text-[13px]">
             Načítání…
           </div>
         }
@@ -337,51 +298,47 @@ export default async function InzercePage({
     );
   }
 
-  // ── Landing page mode (no filters) ─────────────────────────────────────
+  // ── Landing page mode ──
   return (
     <div className="space-y-10">
 
-      {/* ── Search hero ──────────────────────────────────────── */}
+      {/* Search hero */}
       <SearchHero activeCategory={sp.category} activeLocation={sp.location} />
 
-      {/* ── Landing page sections ───────────────── */}
       {!hasFilter && (
         <>
-          {/* ── B) Market stats bar ── */}
+          {/* Market stats */}
           <section>
-            <h2 className="mb-4 text-lg font-bold">{marketStats.heading}</h2>
-            <div className="grid gap-3 grid-cols-2 lg:grid-cols-4">
+            <h2 className="text-sm font-semibold text-foreground mb-4">{marketStats.heading}</h2>
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-px bg-border rounded-lg overflow-hidden">
               {marketStats.stats.map((s) => (
-                <div
-                  key={s.label}
-                  className="rounded-xl border border-border bg-card p-4"
-                >
-                  <div className="text-xl font-bold text-accent-light leading-tight">{s.value}</div>
-                  <div className="mt-1 text-sm font-semibold text-foreground">{s.label}</div>
-                  <div className="mt-0.5 text-xs text-muted">{s.sub}</div>
+                <div key={s.label} className="bg-surface-1 px-5 py-4">
+                  <div className="text-lg font-semibold text-foreground tabular-nums">{s.value}</div>
+                  <div className="text-[11px] text-text-tertiary mt-0.5">{s.label}</div>
                 </div>
               ))}
             </div>
           </section>
 
-          {/* ── C) Newest listings — one section per category ── */}
+          {/* Newest listings sections */}
           {(newestSections as NewestSection[]).map((section) => (
             <section key={section.category}>
-              <div className="mb-4 flex items-center justify-between gap-4">
+              <div className="mb-4 flex items-center justify-between">
                 <div className="flex items-center gap-2.5">
-                  <h2 className="text-lg font-bold">{section.label}</h2>
-                  <span className="rounded-full bg-green/10 px-2.5 py-0.5 text-xs font-bold text-green outline outline-1 outline-green/20">
+                  <h2 className="text-sm font-semibold text-foreground">{section.label}</h2>
+                  <span className="inline-flex items-center gap-1 rounded-md bg-green/10 px-2 py-0.5 text-[10px] font-medium text-green">
+                    <span className="h-1 w-1 rounded-full bg-green animate-pulse" />
                     Právě přidáno
                   </span>
                 </div>
                 <a
                   href={`/inzerce?sort=newest&category=${section.category}`}
-                  className="text-sm text-accent-light hover:text-accent transition-colors"
+                  className="text-[12px] text-accent-light hover:text-accent transition-colors"
                 >
                   Zobrazit vše →
                 </a>
               </div>
-              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                 {section.listings.map((l) => (
                   <NewestCard key={l.id} listing={l} />
                 ))}
@@ -389,12 +346,12 @@ export default async function InzercePage({
             </section>
           ))}
 
-          {/* ── D) Explore by city / district ── */}
-          <section className="space-y-6">
-            <h2 className="text-lg font-bold">Prozkoumejte podle lokality</h2>
+          {/* Explore by location */}
+          <section className="space-y-5">
+            <h2 className="text-sm font-semibold text-foreground">Prozkoumejte podle lokality</h2>
 
-            {/* Major cities grid */}
-            <div className="grid gap-3 grid-cols-2 sm:grid-cols-4 lg:grid-cols-8">
+            {/* Major cities */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-px bg-border rounded-lg overflow-hidden">
               {HOT_PLACES.map((place) => {
                 const href = cat
                   ? `/inzerce?location=${encodeURIComponent(place.label)}&category=${cat}`
@@ -403,15 +360,10 @@ export default async function InzercePage({
                   <a
                     key={place.label}
                     href={href}
-                    className="group flex flex-col items-center gap-2 rounded-xl border border-border bg-card p-4 text-center transition-all hover:border-accent/30 hover:bg-card-hover hover:-translate-y-0.5"
+                    className="bg-surface-1 px-3 py-3.5 text-center transition-colors hover:bg-surface-2"
                   >
-                    <span className="text-2xl">{place.emoji}</span>
-                    <div>
-                      <div className="text-sm font-semibold text-foreground group-hover:text-accent-light transition-colors">
-                        {place.label}
-                      </div>
-                      <div className="text-[10px] text-muted mt-0.5">{place.sublabel}</div>
-                    </div>
+                    <div className="text-[13px] font-medium text-foreground">{place.label}</div>
+                    <div className="text-[10px] text-text-tertiary mt-0.5">{place.sublabel}</div>
                   </a>
                 );
               })}
@@ -419,11 +371,11 @@ export default async function InzercePage({
 
             {/* Prague districts */}
             <div>
-              <div className="mb-3 flex items-center gap-2">
-                <span className="text-sm font-semibold text-foreground">Části Prahy</span>
-                <div className="h-px flex-1 bg-border/60" />
+              <div className="mb-3 flex items-center gap-3">
+                <span className="text-[12px] font-medium text-text-secondary">Části Prahy</span>
+                <div className="h-px flex-1 bg-border" />
               </div>
-              <div className="flex flex-wrap gap-2">
+              <div className="flex flex-wrap gap-1.5">
                 {PRAGUE_AREAS.map((area) => {
                   const href = cat
                     ? `/inzerce?location=${encodeURIComponent(area)}&category=${cat}`
@@ -432,7 +384,7 @@ export default async function InzercePage({
                     <a
                       key={area}
                       href={href}
-                      className="rounded-full border border-border bg-card px-4 py-2 text-sm font-medium text-muted transition-all hover:border-accent/30 hover:text-foreground"
+                      className="rounded-md border border-border bg-surface-1 px-3 py-1.5 text-[12px] text-text-secondary transition-all hover:border-border-hover hover:text-foreground"
                     >
                       {area}
                     </a>
@@ -442,15 +394,15 @@ export default async function InzercePage({
             </div>
           </section>
 
-          {/* ── E) Popular searches ── */}
+          {/* Popular searches */}
           <section>
-            <h2 className="mb-4 text-lg font-bold">Nejčastěji hledáte</h2>
-            <div className="flex flex-wrap gap-2">
+            <h2 className="text-sm font-semibold text-foreground mb-3">Nejčastěji hledáte</h2>
+            <div className="flex flex-wrap gap-1.5">
               {popularSearches.map((s) => (
                 <a
                   key={s.label}
                   href={s.href}
-                  className="rounded-full border border-border bg-card px-4 py-2 text-sm text-muted transition-all hover:border-accent/30 hover:text-foreground"
+                  className="rounded-md border border-border bg-surface-1 px-3 py-1.5 text-[12px] text-text-secondary transition-all hover:border-border-hover hover:text-foreground"
                 >
                   {s.label}
                 </a>
@@ -458,66 +410,88 @@ export default async function InzercePage({
             </div>
           </section>
 
-          {/* ── F) Guides ── */}
+          {/* Guides */}
           <section>
-            <h2 className="mb-4 text-lg font-bold">Průvodci a rady</h2>
-            <div className="grid gap-4 sm:grid-cols-3">
-              {guides.map((g, i) => {
-                const Icon = GUIDE_ICONS[i % GUIDE_ICONS.length];
-                return (
-                  <div
-                    key={g.title}
-                    className="group flex flex-col gap-3 rounded-xl border border-border bg-card p-5 transition-all hover:border-accent/30 hover:shadow-lg hover:shadow-black/20"
+            <h2 className="text-sm font-semibold text-foreground mb-4">Průvodci a rady</h2>
+            <div className="grid gap-3 sm:grid-cols-3">
+              {guides.map((g) => (
+                <div
+                  key={g.title}
+                  className="rounded-lg border border-border bg-surface-1 p-5 card-lift"
+                >
+                  <h3 className="text-[13px] font-medium text-foreground leading-snug mb-2">
+                    {g.title}
+                  </h3>
+                  <p className="text-[12px] text-text-tertiary leading-relaxed mb-4">{g.desc}</p>
+                  <Link
+                    href={g.cta}
+                    className="text-[12px] font-medium text-accent-light hover:text-accent transition-colors"
                   >
-                    <div className="flex h-10 w-10 items-center justify-center rounded-lg border border-border bg-background text-muted">
-                      <Icon />
-                    </div>
-                    <div>
-                      <h3 className="text-sm font-bold text-foreground group-hover:text-accent-light transition-colors leading-snug mb-1.5">
-                        {g.title}
-                      </h3>
-                      <p className="text-xs text-muted leading-relaxed">{g.desc}</p>
-                    </div>
-                    <a
-                      href={g.cta}
-                      className="mt-auto text-xs font-semibold text-accent-light hover:underline"
-                    >
-                      Číst →
-                    </a>
-                  </div>
-                );
-              })}
+                    Číst více →
+                  </Link>
+                </div>
+              ))}
+            </div>
+          </section>
+
+          {/* Bottom CTA */}
+          <section className="rounded-lg border border-border bg-surface-1 p-8 md:p-10">
+            <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
+              <div className="max-w-lg">
+                <h2 className="text-xl font-semibold text-foreground">
+                  Porovnejte s reálnými cenami z katastru
+                </h2>
+                <p className="mt-2 text-[14px] text-text-secondary leading-relaxed">
+                  Data ze skutečných transakcí — ne nabídkové ceny. Zjistěte, jestli je inzerát pod nebo nad tržní cenou.
+                </p>
+              </div>
+              <div className="flex gap-3 shrink-0">
+                <Link href="/prodeje" className="btn-primary px-5 py-2.5 text-[13px]">
+                  Tržní data
+                </Link>
+                <Link href="/data" className="btn-outline px-5 py-2.5 text-[13px]">
+                  Analýzy
+                </Link>
+              </div>
             </div>
           </section>
         </>
       )}
 
-      {/* ── Divider ──────────────────────────────────────────── */}
-      <div className="flex items-center gap-4">
-        <div className="h-px flex-1 bg-border/60" />
-        <span className="text-xs font-semibold uppercase tracking-widest text-muted">
-          {(data.total || 0).toLocaleString("cs-CZ")} inzerátů
-        </span>
-        <div className="h-px flex-1 bg-border/60" />
-      </div>
+      {/* Divider */}
+      <div className="h-px bg-border" />
 
-      {/* ── Full filterable grid ──────────────────────────────── */}
-      <Suspense
-        fallback={
-          <div className="h-96 flex items-center justify-center text-muted text-sm">
-            Načítání…
+      {/* Full filterable grid */}
+      <section>
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <h2 className="text-sm font-semibold text-foreground">Všechny inzeráty</h2>
+            <p className="text-[12px] text-text-tertiary mt-0.5">
+              <span className="tabular-nums font-medium text-text-secondary">
+                {(data.total || 0).toLocaleString("cs-CZ")}
+              </span>{" "}
+              inzerátů celkem
+            </p>
           </div>
-        }
-      >
-        <InzerceClient
-          listings={data.listings || []}
-          total={data.total || 0}
-          pages={data.pages || 1}
-          currentPage={currentPage}
-          sp={sp}
-          defaultSplit={!!(sp.location || sp.min_price || sp.max_price || sp.min_area || sp.max_area || sp.layout)}
-        />
-      </Suspense>
+        </div>
+
+        <Suspense
+          fallback={
+            <div className="h-96 flex items-center justify-center text-text-secondary text-[13px]">
+              Načítání…
+            </div>
+          }
+        >
+          <InzerceClient
+            listings={data.listings || []}
+            total={data.total || 0}
+            pages={data.pages || 1}
+            currentPage={currentPage}
+            sp={sp}
+            defaultSplit={!!(sp.location || sp.min_price || sp.max_price || sp.min_area || sp.max_area || sp.layout)}
+          />
+        </Suspense>
+      </section>
     </div>
   );
 }

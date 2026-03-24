@@ -1,8 +1,9 @@
 import Link from "next/link";
 import SoldPriceChart from "@/components/SoldPriceChart";
+import { baseUrl } from "@/lib/base-url";
 
 async function fetchJSON(path: string) {
-  const base = process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3000";
+  const base = await baseUrl();
   const res = await fetch(`${base}${path}`, { cache: "no-store" });
   return res.json();
 }
@@ -43,7 +44,7 @@ export default async function DataPage() {
   const history = historyData.history || [];
 
   // Calculate rental yield data from our listings
-  const base = process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3000";
+  const base = await baseUrl();
   let yieldData: Array<{
     region: string;
     avg_sale_m2: number;

@@ -63,8 +63,6 @@ interface Props {
   onPinClick?: (listing: ListingPin) => void;
 }
 
-const SEZNAM_API_KEY = process.env.NEXT_PUBLIC_SEZNAM_MAPS_API_KEY || "";
-
 export default function ListingsMap({ category, location, minPrice, maxPrice, minArea, maxArea, layout, selectedId, onPinClick }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<L.Map | null>(null);
@@ -82,12 +80,12 @@ export default function ListingsMap({ category, location, minPrice, maxPrice, mi
       zoomControl: true,
     });
 
-    // Seznam Mapy.cz tiles (basic map set)
+    // OpenStreetMap tiles
     L.tileLayer(
-      `https://api.mapy.cz/v1/maptiles/basic/256/{z}/{x}/{y}?apikey=${SEZNAM_API_KEY}`,
+      "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
       {
         attribution:
-          '<a href="https://mapy.cz" target="_blank" rel="noopener">&copy; Seznam.cz, a.s.</a> &copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a>',
+          '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors',
         maxZoom: 19,
       }
     ).addTo(map);
@@ -162,20 +160,6 @@ export default function ListingsMap({ category, location, minPrice, maxPrice, mi
   return (
     <div className="relative h-full w-full rounded-xl overflow-hidden border border-border">
       <div ref={containerRef} className="h-full w-full" />
-
-      {/* Mapy.cz logo attribution */}
-      <a
-        href="https://mapy.cz"
-        target="_blank"
-        rel="noopener noreferrer"
-        className="absolute bottom-12 right-2 z-[400]"
-      >
-        <img
-          src="https://api.mapy.cz/img/api/logo.svg"
-          alt="Mapy.cz"
-          style={{ height: 24 }}
-        />
-      </a>
 
       {loading && (
         <div className="absolute inset-0 flex items-center justify-center bg-card/70 backdrop-blur-sm">

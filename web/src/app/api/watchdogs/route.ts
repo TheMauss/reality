@@ -8,6 +8,7 @@ async function migrate(db: ReturnType<typeof getWriteDB>) {
     "ALTER TABLE watchdogs ADD COLUMN layout TEXT",
     "ALTER TABLE watchdogs ADD COLUMN price_m2_min REAL",
     "ALTER TABLE watchdogs ADD COLUMN price_m2_max REAL",
+    "ALTER TABLE watchdogs ADD COLUMN property_type TEXT",
   ]) {
     try { await db.prepare(col).run(); } catch { /* column already exists */ }
   }
@@ -47,17 +48,18 @@ export async function POST(req: NextRequest) {
 
   const result = await db.prepare(
     `INSERT INTO watchdogs (
-      user_id, name, category, region_id, district_id, location,
+      user_id, name, category, property_type, region_id, district_id, location,
       price_min, price_max, area_min, area_max, price_m2_min, price_m2_max,
       layout, keywords,
       watch_new, watch_drops, watch_drops_min_pct,
       watch_underpriced, watch_underpriced_pct, watch_returned,
       notify_email, notify_telegram, notify_frequency
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   ).run(
     session.user.id,
     body.name,
     body.category || null,
+    body.property_type?.length ? JSON.stringify(body.property_type) : null,
     body.region_id || null,
     body.district_id || null,
     body.location || null,

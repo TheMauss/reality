@@ -17,7 +17,7 @@ export async function GET(req: NextRequest) {
 
   const db = getDB();
 
-  let where = "WHERE 1=1";
+  let where = "WHERE removed_at IS NULL";
   const params: (string | number)[] = [];
 
   // Support comma-separated categories (e.g. "byty-prodej,domy-prodej")
@@ -50,14 +50,14 @@ export async function GET(req: NextRequest) {
     where += " AND area_m2 <= ?";
     params.push(maxArea);
   }
-  // Support comma-separated layouts (e.g. "1+kk,2+kk")
+  // Support comma-separated layouts (e.g. "1+kk,2+kk") — use dispozice column for indexed lookups
   const layouts = layout ? layout.split(",").map(s => s.trim()).filter(Boolean) : [];
   if (layouts.length === 1) {
-    where += " AND title LIKE ?";
-    params.push(`%${layouts[0]}%`);
+    where += " AND dispozice = ?";
+    params.push(layouts[0]);
   } else if (layouts.length > 1) {
-    where += ` AND (${layouts.map(() => "title LIKE ?").join(" OR ")})`;
-    params.push(...layouts.map(l => `%${l}%`));
+    where += ` AND dispozice IN (${layouts.map(() => "?").join(",")})`;
+    params.push(...layouts);
   }
 
   const sortMap: Record<string, string> = {
@@ -77,10 +77,10 @@ export async function GET(req: NextRequest) {
 
   const rows = await db
     .prepare(
-      `SELECT l.*,
-        CASE WHEN l.area_m2 > 0 THEN ROUND(l.price * 1.0 / l.area_m2) ELSE NULL END as price_m2,
-        (SELECT json_group_array(json_object('source', source, 'url', url))
-         FROM listing_sources WHERE listing_id = l.id AND removed_at IS NULL) as sources_json
+      `SELECT l.id, l.title, l.url, l.location, l.area_m2, l.category, l.dispozice,
+        l.price, l.first_seen_at, l.last_seen_at, l.lat, l.lon, l.region_id, l.district_id,
+        l.image_url,
+        CASE WHEN l.area_m2 > 0 THEN ROUND(l.price * 1.0 / l.area_m2) ELSE NULL END as price_m2
        FROM listings l ${where}
        ORDER BY ${orderBy}
        LIMIT ? OFFSET ?`

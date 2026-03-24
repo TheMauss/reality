@@ -21,7 +21,7 @@ export async function PUT(
 
   await db.prepare(
     `UPDATE watchdogs SET
-      name = ?, category = ?, region_id = ?, district_id = ?, location = ?,
+      name = ?, category = ?, property_type = ?, region_id = ?, district_id = ?, location = ?,
       price_min = ?, price_max = ?, area_min = ?, area_max = ?,
       price_m2_min = ?, price_m2_max = ?,
       layout = ?, keywords = ?,
@@ -33,6 +33,7 @@ export async function PUT(
   ).run(
     body.name,
     body.category || null,
+    body.property_type?.length ? JSON.stringify(body.property_type) : null,
     body.region_id || null,
     body.district_id || null,
     body.location || null,

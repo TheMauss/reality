@@ -6,6 +6,7 @@ interface Watchdog {
   name: string;
   active: number;
   category: string | null;
+  property_type: string | null;
   region_id: number | null;
   district_id: number | null;
   location: string | null;
@@ -35,6 +36,7 @@ export interface ParsedListing {
   location: string;
   area_m2: number | null;
   category: string;
+  dispozice?: string | null;
   price: number;
   lat: number | null;
   lon: number | null;
@@ -171,11 +173,17 @@ export async function runWatchdog(client: Client, events: ScrapeEvents): Promise
     }
   }
 
-  // Insert all matches
+  // Insert all matches (skip duplicates)
   if (matches.length > 0) {
     const stmts = matches.map((m) => ({
-      sql: "INSERT INTO watchdog_matches (watchdog_id, listing_id, match_type, match_detail) VALUES (?, ?, ?, ?)",
-      args: [m.watchdog_id, m.listing_id, m.match_type, m.match_detail] as any[],
+      sql: `INSERT INTO watchdog_matches (watchdog_id, listing_id, match_type, match_detail)
+            SELECT ?, ?, ?, ?
+            WHERE NOT EXISTS (
+              SELECT 1 FROM watchdog_matches
+              WHERE watchdog_id = ? AND listing_id = ? AND match_type = ?
+            )`,
+      args: [m.watchdog_id, m.listing_id, m.match_type, m.match_detail,
+             m.watchdog_id, m.listing_id, m.match_type] as any[],
     }));
     await client.batch(stmts, "write");
     console.log(`Watchdog: ${matches.length} matches for ${watchdogs.length} active watchdogs`);
@@ -190,6 +198,14 @@ function matchesFilter(listing: ParsedListing, wd: Watchdog): boolean {
     try { cats = JSON.parse(wd.category); if (!Array.isArray(cats)) cats = [wd.category]; }
     catch { cats = [wd.category]; }
     if (cats.length > 0 && !cats.includes(listing.category)) return false;
+  }
+  if (wd.property_type) {
+    try {
+      const types = JSON.parse(wd.property_type) as string[];
+      if (types.length > 0) {
+        if (!listing.dispozice || !types.includes(listing.dispozice)) return false;
+      }
+    } catch { /* */ }
   }
   if (wd.region_id && listing.region_id !== wd.region_id) return false;
   if (wd.district_id && listing.district_id !== wd.district_id) return false;
@@ -236,7 +252,14 @@ function matchesFilter(listing: ParsedListing, wd: Watchdog): boolean {
   return true;
 }
 
+function soldCategory(listingCategory: string): string {
+  if (listingCategory.startsWith("domy")) return "domy";
+  return "byty"; // default for byty-prodej, byty-najem; pozemky/komercni have no sold data
+}
+
 async function getLocalAvgPriceM2(client: Client, listing: ParsedListing): Promise<number | null> {
+  const cat = soldCategory(listing.category);
+
   // 1. Try ward — match first part of location string against sold_wards.name within district
   if (listing.district_id && listing.location) {
     const wardName = listing.location.split(",")[0].trim();
@@ -244,10 +267,10 @@ async function getLocalAvgPriceM2(client: Client, listing: ParsedListing): Promi
       sql: `SELECT h.avg_price_m2
             FROM sold_price_history h
             JOIN sold_wards w ON w.id = h.entity_id
-            WHERE h.entity_type = 'ward' AND h.category = 'byty'
+            WHERE h.entity_type = 'ward' AND h.category = ?
               AND w.district_id = ? AND w.name = ?
             ORDER BY h.year * 100 + h.month DESC LIMIT 1`,
-      args: [listing.district_id, wardName],
+      args: [cat, listing.district_id, wardName],
     })).rows[0];
     if (row?.avg_price_m2) return row.avg_price_m2 as number;
   }
@@ -256,9 +279,9 @@ async function getLocalAvgPriceM2(client: Client, listing: ParsedListing): Promi
   if (listing.district_id) {
     const row = (await client.execute({
       sql: `SELECT avg_price_m2 FROM sold_price_history
-            WHERE entity_type = 'district' AND entity_id = ? AND category = 'byty'
+            WHERE entity_type = 'district' AND entity_id = ? AND category = ?
             ORDER BY year * 100 + month DESC LIMIT 1`,
-      args: [listing.district_id],
+      args: [listing.district_id, cat],
     })).rows[0];
     if (row?.avg_price_m2) return row.avg_price_m2 as number;
   }
@@ -267,9 +290,9 @@ async function getLocalAvgPriceM2(client: Client, listing: ParsedListing): Promi
   if (listing.region_id) {
     const row = (await client.execute({
       sql: `SELECT avg_price_m2 FROM sold_price_history
-            WHERE entity_type = 'region' AND entity_id = ? AND category = 'byty'
+            WHERE entity_type = 'region' AND entity_id = ? AND category = ?
             ORDER BY year * 100 + month DESC LIMIT 1`,
-      args: [listing.region_id],
+      args: [listing.region_id, cat],
     })).rows[0];
     if (row?.avg_price_m2) return row.avg_price_m2 as number;
   }
@@ -283,7 +306,8 @@ async function getCachedLocalAvgPriceM2(
   cache: Map<string, number | null>
 ): Promise<number | null> {
   const wardName = listing.location ? listing.location.split(",")[0].trim() : "";
-  const key = `${wardName}_${listing.district_id ?? "no-district"}_${listing.region_id ?? "no-region"}`;
+  const cat = soldCategory(listing.category);
+  const key = `${cat}_${wardName}_${listing.district_id ?? "no-district"}_${listing.region_id ?? "no-region"}`;
   if (cache.has(key)) return cache.get(key)!;
   const result = await getLocalAvgPriceM2(client, listing);
   cache.set(key, result);

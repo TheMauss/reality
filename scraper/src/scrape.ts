@@ -116,12 +116,15 @@ const MIGRATION_SQLS = [
   "ALTER TABLE listings ADD COLUMN description TEXT",
   "ALTER TABLE listings ADD COLUMN image_url TEXT",
   "ALTER TABLE listings ADD COLUMN dispozice TEXT",
+  "ALTER TABLE watchdogs ADD COLUMN property_type TEXT",
   "CREATE INDEX IF NOT EXISTS idx_listings_region ON listings(region_id)",
   "CREATE INDEX IF NOT EXISTS idx_listings_district ON listings(district_id)",
   "CREATE INDEX IF NOT EXISTS idx_listings_category ON listings(category)",
   "CREATE INDEX IF NOT EXISTS idx_listings_location ON listings(location)",
   "CREATE INDEX IF NOT EXISTS idx_listings_last_seen ON listings(last_seen_at)",
   "CREATE INDEX IF NOT EXISTS idx_listings_removed ON listings(removed_at)",
+  "CREATE INDEX IF NOT EXISTS idx_listings_dispozice ON listings(dispozice)",
+  "CREATE INDEX IF NOT EXISTS idx_listings_price ON listings(price)",
 ];
 
 async function initSchema(client: Client) {
@@ -134,6 +137,25 @@ async function initSchema(client: Client) {
       INSERT OR IGNORE INTO listing_sources (listing_id, source, source_id, url, first_seen_at, last_seen_at, removed_at)
       SELECT id, 'sreality', id, url, first_seen_at, last_seen_at, removed_at FROM listings
     `);
+  } catch { /* */ }
+
+  // Backfill region_id/district_id for BR listings that have lat/lon but no region
+  try {
+    const orphans = (await client.execute(
+      "SELECT id, lat, lon FROM listings WHERE id LIKE 'bz_%' AND region_id IS NULL AND lat IS NOT NULL AND lon IS NOT NULL"
+    )).rows as unknown as { id: string; lat: number; lon: number }[];
+    if (orphans.length > 0) {
+      console.log(`Backfilling region/district for ${orphans.length} BR listings...`);
+      for (const o of orphans) {
+        const geo = await resolveGeoIds(client, o.lat, o.lon);
+        if (geo.region_id) {
+          await client.execute({
+            sql: "UPDATE listings SET region_id = ?, district_id = ? WHERE id = ?",
+            args: [geo.region_id, geo.district_id, o.id],
+          });
+        }
+      }
+    }
   } catch { /* */ }
 }
 
@@ -273,12 +295,21 @@ export async function runScrape() {
     }
   }
 
-  // Mark listings not seen in this run as removed
-  const removedResult = await client.execute({
-    sql: "UPDATE listings SET removed_at = ? WHERE last_seen_at IS NOT NULL AND last_seen_at != ? AND removed_at IS NULL",
-    args: [now, now],
-  });
-  const removedCount = removedResult.rowsAffected;
+  // Mark listings not seen in this run as removed — but only if we scraped
+  // a meaningful amount. If scrape was partial (e.g. API failures / rate limits),
+  // we don't want to mark everything as removed.
+  const activeCount = (await client.execute("SELECT COUNT(*) as c FROM listings WHERE removed_at IS NULL")).rows[0] as unknown as { c: number };
+  const minScrapedRatio = 0.3; // require at least 30% of active listings to be re-seen
+  let removedCount = 0;
+  if (scraped.length > 0 && (activeCount.c === 0 || scraped.length / activeCount.c >= minScrapedRatio)) {
+    const removedResult = await client.execute({
+      sql: "UPDATE listings SET removed_at = ? WHERE last_seen_at IS NOT NULL AND last_seen_at != ? AND removed_at IS NULL",
+      args: [now, now],
+    });
+    removedCount = removedResult.rowsAffected;
+  } else {
+    console.warn(`Skipping removed_at marking: scraped ${scraped.length} vs ${activeCount.c} active (ratio ${activeCount.c > 0 ? (scraped.length / activeCount.c).toFixed(2) : 'N/A'} < ${minScrapedRatio})`);
+  }
 
   // Run watchdog checks
   const watchdogMatches = await runWatchdog(client, events);
@@ -419,7 +450,25 @@ async function findDuplicate(
   return (result.rows[0]?.id as string) ?? null;
 }
 
-export async function runBezrealitkyScan(mode: "fast" | "full"): Promise<void> {
+async function resolveGeoIds(
+  client: Client,
+  lat: number | null,
+  lon: number | null,
+): Promise<{ region_id: number | null; district_id: number | null }> {
+  if (!lat || !lon) return { region_id: null, district_id: null };
+  const row = (await client.execute({
+    sql: `SELECT region_id, district_id FROM listings
+          WHERE region_id IS NOT NULL
+            AND lat IS NOT NULL AND lon IS NOT NULL
+            AND ABS(lat - ?) < 0.05 AND ABS(lon - ?) < 0.07
+          ORDER BY (lat - ?) * (lat - ?) + (lon - ?) * (lon - ?)
+          LIMIT 1`,
+    args: [lat, lon, lat, lat, lon, lon],
+  })).rows[0] as unknown as { region_id: number; district_id: number | null } | undefined;
+  return row ? { region_id: row.region_id, district_id: row.district_id } : { region_id: null, district_id: null };
+}
+
+export async function runBezrealitkyScan(mode: "fast" | "full"): Promise<ScrapeEvents> {
   const client = getClient();
 
   // Ensure listing_sources table exists
@@ -449,13 +498,15 @@ export async function runBezrealitkyScan(mode: "fast" | "full"): Promise<void> {
       ? await scrapeLatestBezrealitky(knownSourceIds)
       : await scrapeAllBezrealitky();
 
-  if (scraped.length === 0) return;
+  const emptyEvents: ScrapeEvents = { newListings: [], priceDrops: [], returnedListings: [] };
+  if (scraped.length === 0) return emptyEvents;
 
   const now = new Date().toISOString();
 
   let newCount = 0;
   let matchedCount = 0;
   let updatedCount = 0;
+  const events: ScrapeEvents = { newListings: [], priceDrops: [], returnedListings: [] };
 
   const tx = await client.transaction("write");
   try {
@@ -491,9 +542,10 @@ export async function runBezrealitkyScan(mode: "fast" | "full"): Promise<void> {
       } else {
         const newId = `bz_${item.source_id}`;
         try {
+          const geo = await resolveGeoIds(client, item.lat, item.lon);
           await tx.execute({
             sql: "INSERT INTO listings (id, title, url, location, area_m2, category, dispozice, price, first_seen_at, last_seen_at, lat, lon, region_id, district_id, description, image_url) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-            args: [newId, item.title, item.url, item.location, item.area_m2, item.category, item.dispozice, item.price, now, now, item.lat, item.lon, item.region_id, null, item.description, item.image_url],
+            args: [newId, item.title, item.url, item.location, item.area_m2, item.category, item.dispozice, item.price, now, now, item.lat, item.lon, geo.region_id, geo.district_id, item.description, item.image_url],
           });
           await tx.execute({
             sql: "INSERT INTO price_history (listing_id, price, recorded_at) VALUES (?, ?, ?)",
@@ -502,6 +554,20 @@ export async function runBezrealitkyScan(mode: "fast" | "full"): Promise<void> {
           await tx.execute({
             sql: "INSERT OR IGNORE INTO listing_sources (listing_id, source, source_id, url, first_seen_at, last_seen_at, removed_at) VALUES (?, 'bezrealitky', ?, ?, ?, ?, NULL)",
             args: [newId, item.source_id, item.url, now, now],
+          });
+          events.newListings.push({
+            id: newId,
+            title: item.title,
+            url: item.url,
+            location: item.location,
+            area_m2: item.area_m2,
+            category: item.category,
+            dispozice: item.dispozice,
+            price: item.price,
+            lat: item.lat,
+            lon: item.lon,
+            region_id: geo.region_id,
+            district_id: geo.district_id,
           });
           newCount++;
         } catch (err) {
@@ -516,7 +582,14 @@ export async function runBezrealitkyScan(mode: "fast" | "full"): Promise<void> {
     throw err;
   }
 
-  console.log(`BR ${mode}: ${newCount} new, ${matchedCount} matched, ${updatedCount} updated`);
+  if (newCount > 0) {
+    const watchdogMatches = await runWatchdog(client, events);
+    console.log(`BR ${mode}: ${newCount} new, ${matchedCount} matched, ${updatedCount} updated, ${watchdogMatches} watchdog matches`);
+  } else {
+    console.log(`BR ${mode}: ${newCount} new, ${matchedCount} matched, ${updatedCount} updated`);
+  }
+
+  return events;
 }
 
 // Run directly

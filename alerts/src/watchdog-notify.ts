@@ -1,6 +1,5 @@
 import { getClient } from "./turso";
 import { Resend } from "resend";
-import TelegramBot from "node-telegram-bot-api";
 
 interface MatchRow {
   id: number;
@@ -15,19 +14,10 @@ interface MatchRow {
   price: number | null;
   area_m2: number | null;
   category: string | null;
-}
-
-interface WatchdogRow {
-  id: number;
-  user_id: number;
-  name: string;
+  watchdog_name: string;
   notify_email: number;
   notify_telegram: number;
-  notify_frequency: string;
-}
-
-interface UserRow {
-  email: string;
+  user_email: string | null;
   telegram_id: string | null;
 }
 
@@ -42,10 +32,13 @@ export async function sendInstantNotifications(): Promise<number> {
   const client = getClient();
 
   const matches = (await client.execute(
-    `SELECT wm.*, l.title, l.url, l.location, l.price, l.area_m2, l.category
+    `SELECT wm.*, l.title, l.url, l.location, l.price, l.area_m2, l.category,
+            w.name as watchdog_name, w.notify_email, w.notify_telegram,
+            u.email as user_email, u.telegram_id
      FROM watchdog_matches wm
      LEFT JOIN listings l ON l.id = wm.listing_id
      JOIN watchdogs w ON w.id = wm.watchdog_id
+     JOIN users u ON u.id = w.user_id
      WHERE wm.notified = 0 AND w.notify_frequency = 'instant'
      ORDER BY wm.watchdog_id, wm.created_at DESC`
   )).rows as unknown as MatchRow[];
@@ -61,36 +54,27 @@ export async function sendInstantNotifications(): Promise<number> {
 
   let sentCount = 0;
 
-  for (const [watchdogId, wdMatches] of byWatchdog) {
-    const wd = (await client.execute({
-      sql: "SELECT id, user_id, name, notify_email, notify_telegram, notify_frequency FROM watchdogs WHERE id = ?",
-      args: [watchdogId],
-    })).rows[0] as unknown as WatchdogRow | undefined;
-    if (!wd) continue;
+  for (const [, wdMatches] of byWatchdog) {
+    const first = wdMatches[0];
 
-    const user = (await client.execute({
-      sql: "SELECT email, telegram_id FROM users WHERE id = ?",
-      args: [wd.user_id],
-    })).rows[0] as unknown as UserRow | undefined;
-    if (!user) continue;
-
-    if (wd.notify_email && user.email) {
-      await sendWatchdogEmail(user.email, wd.name, wdMatches);
+    let sent = false;
+    if (first.notify_email && first.user_email) {
+      await sendWatchdogEmail(first.user_email, first.watchdog_name, wdMatches);
+      sent = true;
+    }
+    if (first.notify_telegram && first.telegram_id) {
+      const ok = await sendWatchdogTelegram(first.telegram_id, first.watchdog_name, wdMatches);
+      if (ok) sent = true;
     }
 
-    if (wd.notify_telegram && user.telegram_id) {
-      await sendWatchdogTelegram(user.telegram_id, wd.name, wdMatches);
+    if (sent) {
+      const ids = wdMatches.map((m) => m.id);
+      await client.execute({
+        sql: `UPDATE watchdog_matches SET notified = 1 WHERE id IN (${ids.map(() => "?").join(",")})`,
+        args: ids,
+      });
+      sentCount += wdMatches.length;
     }
-
-    sentCount += wdMatches.length;
-  }
-
-  if (matches.length > 0) {
-    const matchIds = matches.map((m) => m.id);
-    await client.execute({
-      sql: `UPDATE watchdog_matches SET notified = 1 WHERE id IN (${matchIds.map(() => "?").join(",")})`,
-      args: matchIds,
-    });
   }
 
   return sentCount;
@@ -103,10 +87,13 @@ export async function sendDigestNotifications(frequency: "daily" | "weekly"): Pr
   const since = new Date(Date.now() - hoursAgo * 60 * 60 * 1000).toISOString();
 
   const matches = (await client.execute({
-    sql: `SELECT wm.*, l.title, l.url, l.location, l.price, l.area_m2, l.category
+    sql: `SELECT wm.*, l.title, l.url, l.location, l.price, l.area_m2, l.category,
+            w.name as watchdog_name, w.notify_email, w.notify_telegram,
+            u.email as user_email, u.telegram_id
        FROM watchdog_matches wm
        LEFT JOIN listings l ON l.id = wm.listing_id
        JOIN watchdogs w ON w.id = wm.watchdog_id
+       JOIN users u ON u.id = w.user_id
        WHERE wm.notified = 0 AND w.notify_frequency = ? AND wm.created_at >= ?
        ORDER BY wm.watchdog_id, wm.created_at DESC`,
     args: [frequency, since],
@@ -123,40 +110,31 @@ export async function sendDigestNotifications(frequency: "daily" | "weekly"): Pr
 
   let sentCount = 0;
 
-  for (const [watchdogId, wdMatches] of byWatchdog) {
-    const wd = (await client.execute({
-      sql: "SELECT id, user_id, name, notify_email, notify_telegram, notify_frequency FROM watchdogs WHERE id = ?",
-      args: [watchdogId],
-    })).rows[0] as unknown as WatchdogRow | undefined;
-    if (!wd) continue;
+  for (const [, wdMatches] of byWatchdog) {
+    const first = wdMatches[0];
 
-    const user = (await client.execute({
-      sql: "SELECT email, telegram_id FROM users WHERE id = ?",
-      args: [wd.user_id],
-    })).rows[0] as unknown as UserRow | undefined;
-    if (!user) continue;
-
-    if (wd.notify_email && user.email) {
+    let sent = false;
+    if (first.notify_email && first.user_email) {
       await sendWatchdogEmail(
-        user.email,
-        `${wd.name} — ${frequency === "daily" ? "denní" : "týdenní"} souhrn`,
+        first.user_email,
+        `${first.watchdog_name} — ${frequency === "daily" ? "denní" : "týdenní"} souhrn`,
         wdMatches
       );
+      sent = true;
+    }
+    if (first.notify_telegram && first.telegram_id) {
+      const ok = await sendWatchdogTelegram(first.telegram_id, first.watchdog_name, wdMatches);
+      if (ok) sent = true;
     }
 
-    if (wd.notify_telegram && user.telegram_id) {
-      await sendWatchdogTelegram(user.telegram_id, wd.name, wdMatches);
+    if (sent) {
+      const ids = wdMatches.map((m) => m.id);
+      await client.execute({
+        sql: `UPDATE watchdog_matches SET notified = 1 WHERE id IN (${ids.map(() => "?").join(",")})`,
+        args: ids,
+      });
+      sentCount += wdMatches.length;
     }
-
-    sentCount += wdMatches.length;
-  }
-
-  if (matches.length > 0) {
-    const matchIds = matches.map((m) => m.id);
-    await client.execute({
-      sql: `UPDATE watchdog_matches SET notified = 1 WHERE id IN (${matchIds.map(() => "?").join(",")})`,
-      args: matchIds,
-    });
   }
 
   return sentCount;
@@ -221,27 +199,61 @@ async function sendWatchdogEmail(to: string, watchdogName: string, matches: Matc
   console.log(`Watchdog email sent to ${to}: ${matches.length} matches for "${watchdogName}"`);
 }
 
-async function sendWatchdogTelegram(chatId: string, watchdogName: string, matches: MatchRow[]): Promise<void> {
+const delay = (ms: number) => new Promise(r => setTimeout(r, ms));
+
+function escapeHtml(text: string): string {
+  return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
+async function sendWatchdogTelegram(chatId: string, watchdogName: string, matches: MatchRow[]): Promise<boolean> {
   const token = process.env.TELEGRAM_BOT_TOKEN;
   if (!token) {
     console.log(`[TG SKIP] No token, would send ${matches.length} watchdog matches to ${chatId}`);
-    return;
+    return false;
   }
 
-  const lines = matches.slice(0, 10).map((m) => {
-    const detail = m.match_detail ? JSON.parse(m.match_detail) : {};
-    const typeEmoji: Record<string, string> = { new: "🆕", drop: "📉", underpriced: "💰", returned: "🔄" };
-    const emoji = typeEmoji[m.match_type] || "📋";
-    let info = "";
-    if (m.match_type === "drop") info = ` -${detail.drop_pct?.toFixed(1)}%`;
-    else if (m.match_type === "underpriced") info = ` ${detail.diff_pct?.toFixed(1)}% pod průměrem`;
-    return `${emoji} [${m.title || "Inzerát"}](${m.url})${info}\n   📍 ${m.location || "—"} | ${(m.price || 0).toLocaleString("cs-CZ")} Kč`;
-  });
+  try {
+    const lines = matches.slice(0, 10).map((m) => {
+      const detail = m.match_detail ? JSON.parse(m.match_detail) : {};
+      const typeEmoji: Record<string, string> = { new: "🆕", drop: "📉", underpriced: "💰", returned: "🔄" };
+      const emoji = typeEmoji[m.match_type] || "📋";
+      const title = escapeHtml(m.title || "Inzerát");
+      const loc = escapeHtml(m.location || "—");
+      const priceStr = (m.price || 0).toLocaleString("cs-CZ");
+      const priceM2 = m.area_m2 && m.area_m2 > 0 && m.price
+        ? `${Math.round(m.price / m.area_m2).toLocaleString("cs-CZ")} Kč/m²`
+        : null;
+      let info = "";
+      if (m.match_type === "drop") {
+        info = ` <b>-${detail.drop_pct?.toFixed(1)}%</b>`;
+      } else if (m.match_type === "underpriced") {
+        info = ` <b>${detail.diff_pct?.toFixed(1)}% pod průměrem</b>`;
+        if (detail.avg_price_m2) {
+          info += `\n   📊 Průměr: ${Math.round(detail.avg_price_m2).toLocaleString("cs-CZ")} Kč/m² vs ${Math.round(detail.listing_price_m2).toLocaleString("cs-CZ")} Kč/m²`;
+        }
+      }
+      const priceLine = priceM2 ? `${priceStr} Kč (${priceM2})` : `${priceStr} Kč`;
+      const link = m.url ? `\n   🔗 <a href="${m.url}">Detail</a>` : "";
+      return `${emoji} ${title}${info}\n   📍 ${loc} | ${priceLine}${link}`;
+    });
 
-  const extra = matches.length > 10 ? `\n\n...a dalších ${matches.length - 10}` : "";
-  const text = `🐕 *${watchdogName}*\n\n${lines.join("\n\n")}${extra}`;
+    const extra = matches.length > 10 ? `\n\n...a dalších ${matches.length - 10}` : "";
+    const text = `🐕 <b>${escapeHtml(watchdogName)}</b>\n\n${lines.join("\n\n")}${extra}`;
 
-  const bot = new TelegramBot(token);
-  await bot.sendMessage(chatId, text, { parse_mode: "Markdown" });
-  console.log(`Watchdog TG sent to ${chatId}: ${matches.length} matches`);
+    const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ chat_id: chatId, text, parse_mode: "HTML" }),
+    });
+    if (!res.ok) {
+      console.error(`[WATCHDOG TG ERROR] HTTP ${res.status}: ${await res.text()}`);
+      return false;
+    }
+    console.log(`Watchdog TG sent to ${chatId}: ${matches.length} matches`);
+    await delay(50);
+    return true;
+  } catch (err) {
+    console.error(`[WATCHDOG TG ERROR] chatId=${chatId}`, err);
+    return false;
+  }
 }
