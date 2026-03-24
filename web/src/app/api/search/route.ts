@@ -18,6 +18,7 @@ export async function GET(req: NextRequest) {
     parent?: string;
     avg_price_m2?: number;
     count?: number;
+    district_id?: number;
   }> = [];
 
   // Search sold regions (use latest price from history, fallback to table avg)
@@ -65,7 +66,7 @@ export async function GET(req: NextRequest) {
   try {
     const wards = await db
       .prepare(
-        `SELECT w.id, w.name, d.name as district_name,
+        `SELECT w.id, w.name, w.district_id, d.name as district_name,
           COALESCE(h.avg_price_m2, w.avg_price_m2) as avg_price_m2
         FROM sold_wards w
         JOIN sold_districts d ON d.id = w.district_id
@@ -79,9 +80,9 @@ export async function GET(req: NextRequest) {
         GROUP BY w.name, w.district_id
         LIMIT 10`
       )
-      .all(pattern) as unknown as Array<{ id: number; name: string; avg_price_m2: number; district_name: string }>;
+      .all(pattern) as unknown as Array<{ id: number; name: string; avg_price_m2: number; district_name: string; district_id: number }>;
     for (const w of wards) {
-      results.push({ type: "ward", id: w.id, name: w.name, parent: w.district_name, avg_price_m2: w.avg_price_m2 });
+      results.push({ type: "ward", id: w.id, name: w.name, parent: w.district_name, avg_price_m2: w.avg_price_m2, district_id: w.district_id });
     }
   } catch { /* */ }
 

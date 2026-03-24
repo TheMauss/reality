@@ -54,6 +54,7 @@ interface SearchResult {
   parent?: string;
   avg_price_m2?: number;
   count?: number;
+  district_id?: number;
 }
 
 interface WatchdogForm {
@@ -135,7 +136,7 @@ const MATCH_LABELS: Record<string, { label: string; color: string }> = {
   new: { label: "Nový", color: "text-green-400" },
   drop: { label: "Pokles", color: "text-red-400" },
   underpriced: { label: "Pod cenou", color: "text-amber-400" },
-  returned: { label: "Vrácen", color: "text-blue-400" },
+  returned: { label: "Vrácen", color: "text-accent-light" },
 };
 
 const TYPE_ICON: Record<string, string> = {
@@ -487,8 +488,8 @@ export default function WatchdogClient() {
     setForm(f => ({
       ...f,
       location: r.name,
-      locationLabel: r.name,
-      district_id: r.type === "district" ? (r.id as number) : (r.type === "ward" ? null : null),
+      locationLabel: r.type === "ward" && r.parent ? `${r.name} (${r.parent})` : r.name,
+      district_id: r.type === "district" ? (r.id as number) : (r.district_id ?? null),
       region_id: r.type === "region" ? (r.id as number) : null,
       avg_price_m2: r.avg_price_m2 ?? null,
     }));
@@ -544,11 +545,11 @@ export default function WatchdogClient() {
 
       {/* Telegram settings */}
       {session && (
-        <div className="rounded-2xl border border-border bg-card p-5">
+        <div className="rounded-xl border border-border bg-card p-5">
           <div className="flex items-start justify-between gap-6">
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2 mb-1">
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" className="text-blue-400 shrink-0">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" className="text-accent-light shrink-0">
                   <path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.894 8.221-1.97 9.28c-.145.658-.537.818-1.084.508l-3-2.21-1.447 1.394c-.16.16-.295.295-.605.295l.213-3.053 5.56-5.023c.242-.213-.054-.333-.373-.12L8.32 13.617l-2.96-.924c-.643-.204-.657-.643.136-.953l11.57-4.461c.537-.194 1.006.131.828.942z"/>
                 </svg>
                 <span className="text-sm font-semibold">Telegram notifikace</span>
@@ -581,10 +582,10 @@ export default function WatchdogClient() {
                       value={telegramId}
                       onChange={e => setTelegramId(e.target.value)}
                       placeholder="např. 123456789"
-                      className="w-48 rounded-xl border border-border bg-background px-3 py-2 text-sm outline-none focus:border-blue-400/60 transition-colors font-mono"
+                      className="w-48 rounded-xl border border-border bg-background px-3 py-2 text-sm outline-none focus:border-accent/60 transition-colors font-mono"
                     />
                     <button onClick={saveTelegramId} disabled={telegramSaving || !telegramId.trim()}
-                      className="rounded-xl border border-blue-400/30 bg-blue-400/10 px-4 py-2 text-sm font-medium text-blue-300 hover:bg-blue-400/20 transition-all disabled:opacity-40">
+                      className="rounded-xl border border-accent/30 bg-accent-dim px-4 py-2 text-sm font-medium text-accent-light hover:bg-accent-glow transition-all disabled:opacity-40">
                       {telegramSaving ? "Ukládám…" : "Uložit"}
                     </button>
                     {telegramEditing && (
@@ -607,7 +608,7 @@ export default function WatchdogClient() {
 
       {/* Form */}
       {showForm && (
-        <form onSubmit={handleSubmit} className="rounded-2xl border border-border bg-card overflow-hidden">
+        <form onSubmit={handleSubmit} className="rounded-xl border border-border bg-card overflow-hidden">
           {/* Form header */}
           <div className="flex items-center justify-between px-6 py-4 border-b border-border">
             <div className="flex items-center gap-3">
@@ -690,7 +691,7 @@ export default function WatchdogClient() {
                             setForm(f); triggerPreview(f);
                           }}
                           className={`rounded-xl border px-3 py-1.5 text-xs font-semibold transition-all ${
-                            active ? "border-orange-400 bg-orange-400/15 text-orange-300" : "border-border text-muted hover:text-foreground hover:border-border-light"
+                            active ? "border-amber bg-amber/15 text-amber" : "border-border text-muted hover:text-foreground hover:border-border-light"
                           }`}>
                           {pt.label}
                         </button>
@@ -853,14 +854,14 @@ export default function WatchdogClient() {
                 <button type="button" onClick={() => setForm(f => ({ ...f, watch_returned: !f.watch_returned }))}
                   className={`flex flex-col items-start gap-1.5 rounded-xl border p-3.5 text-left transition-all ${
                     form.watch_returned
-                      ? "border-blue-500/40 bg-blue-500/8 ring-1 ring-blue-500/20"
+                      ? "border-accent/40 bg-accent-dim ring-1 ring-accent/20"
                       : "border-border bg-background hover:border-border-light"
                   }`}>
                   <div className="flex w-full items-center justify-between">
                     <span className="text-lg">🔄</span>
-                    <span className={`h-4 w-4 rounded-full border-2 transition-colors ${form.watch_returned ? "border-blue-500 bg-blue-500" : "border-border"}`} />
+                    <span className={`h-4 w-4 rounded-full border-2 transition-colors ${form.watch_returned ? "border-accent bg-accent" : "border-border"}`} />
                   </div>
-                  <span className={`text-sm font-semibold ${form.watch_returned ? "text-blue-400" : "text-foreground"}`}>Vrácené</span>
+                  <span className={`text-sm font-semibold ${form.watch_returned ? "text-accent-light" : "text-foreground"}`}>Vrácené</span>
                   <span className="text-[11px] text-muted leading-tight">Inzerát znovu v nabídce po stažení</span>
                 </button>
               </div>
@@ -872,7 +873,7 @@ export default function WatchdogClient() {
               <div className="mt-1.5 flex flex-wrap items-center gap-2">
                 <button type="button" onClick={() => setForm(f => ({ ...f, notify_telegram: !f.notify_telegram }))}
                   className={`flex items-center gap-2 rounded-xl border px-3.5 py-2 text-sm font-medium transition-all ${
-                    form.notify_telegram ? "border-blue-400/40 bg-blue-400/10 text-blue-300" : "border-border text-muted hover:text-foreground"
+                    form.notify_telegram ? "border-accent/40 bg-accent-dim text-accent-light" : "border-border text-muted hover:text-foreground"
                   }`}>
                   <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor">
                     <path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.894 8.221-1.97 9.28c-.145.658-.537.818-1.084.508l-3-2.21-1.447 1.394c-.16.16-.295.295-.605.295l.213-3.053 5.56-5.023c.242-.213-.054-.333-.373-.12L8.32 13.617l-2.96-.924c-.643-.204-.657-.643.136-.953l11.57-4.461c.537-.194 1.006.131.828.942z"/>
@@ -921,7 +922,7 @@ export default function WatchdogClient() {
         <div className="space-y-4">
           {watchdogs.map(wd => (
             <div key={wd.id}>
-              <div className={`rounded-2xl border p-5 transition-colors ${wd.active ? "border-border bg-card" : "border-border/50 bg-card/50 opacity-60"}`}>
+              <div className={`rounded-xl border p-5 transition-colors ${wd.active ? "border-border bg-card" : "border-border/50 bg-card/50 opacity-60"}`}>
                 <div className="flex items-start justify-between gap-4">
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-3">
@@ -960,7 +961,7 @@ export default function WatchdogClient() {
                       {!!wd.watch_new && <span className="text-xs px-2 py-0.5 rounded-md bg-green-500/10 text-green-400">Nové</span>}
                       {!!wd.watch_drops && <span className="text-xs px-2 py-0.5 rounded-md bg-red-500/10 text-red-400">Poklesy ≥{wd.watch_drops_min_pct}%</span>}
                       {!!wd.watch_underpriced && <span className="text-xs px-2 py-0.5 rounded-md bg-amber-500/10 text-amber-400">Pod cenou ≥{wd.watch_underpriced_pct}%</span>}
-                      {!!wd.watch_returned && <span className="text-xs px-2 py-0.5 rounded-md bg-blue-500/10 text-blue-400">Vrácené</span>}
+                      {!!wd.watch_returned && <span className="text-xs px-2 py-0.5 rounded-md bg-accent-dim text-accent-light">Vrácené</span>}
                     </div>
                   </div>
 
@@ -987,7 +988,7 @@ export default function WatchdogClient() {
 
               {/* Matches panel */}
               {selectedWd === wd.id && (
-                <div className="mt-2 rounded-2xl border border-border/50 bg-card/50 p-5">
+                <div className="mt-2 rounded-xl border border-border/50 bg-card/50 p-5">
                   <h4 className="text-sm font-semibold mb-3">Výsledky ({matchesTotal})</h4>
                   {matchesLoading ? (
                     <p className="text-sm text-muted">Načítám...</p>

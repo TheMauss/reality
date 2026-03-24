@@ -59,7 +59,7 @@ export async function scanExistingListings(wd: WatchdogConfig): Promise<number> 
 
   if (wd.district_id) { conditions.push("district_id = ?"); args.push(wd.district_id); }
   else if (wd.region_id) { conditions.push("region_id = ?"); args.push(wd.region_id); }
-  else if (wd.location) { conditions.push("location LIKE ?"); args.push(`%${wd.location}%`); }
+  if (wd.location) { conditions.push("location LIKE ?"); args.push(`%${wd.location}%`); }
 
   if (wd.price_min) { conditions.push("price >= ?"); args.push(wd.price_min); }
   if (wd.price_max) { conditions.push("price <= ?"); args.push(wd.price_max); }

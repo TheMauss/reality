@@ -29,7 +29,7 @@ export async function POST(req: NextRequest) {
   }
   if (district_id) { conditions.push("district_id = ?"); args.push(district_id); }
   else if (region_id) { conditions.push("region_id = ?"); args.push(region_id); }
-  else if (location) { conditions.push("location LIKE ?"); args.push(`%${location}%`); }
+  if (location) { conditions.push("location LIKE ?"); args.push(`%${location}%`); }
   if (price_min) { conditions.push("price >= ?"); args.push(price_min); }
   if (price_max) { conditions.push("price <= ?"); args.push(price_max); }
   if (area_min) { conditions.push("area_m2 >= ?"); args.push(area_min); }
