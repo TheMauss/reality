@@ -1,4 +1,5 @@
 import { getDB } from "@/lib/db";
+import type { InValue } from "@libsql/client";
 
 interface WatchdogConfig {
   id: number;
@@ -16,6 +17,8 @@ interface WatchdogConfig {
   layout: string | null;
   keywords: string | null;
   watch_new: number;
+  watch_underpriced: number;
+  watch_underpriced_pct: number;
 }
 
 interface ListingRow {
@@ -25,20 +28,24 @@ interface ListingRow {
   location: string;
   price: number;
   area_m2: number | null;
+  category: string;
+  region_id: number | null;
+  district_id: number | null;
   dispozice: string | null;
 }
 
 /**
  * Scans existing DB listings against a watchdog and inserts matches.
+ * Supports both 'new' and 'underpriced' match types.
  * Returns number of new matches inserted.
  */
 export async function scanExistingListings(wd: WatchdogConfig): Promise<number> {
-  if (!wd.watch_new) return 0;
+  if (!wd.watch_new && !wd.watch_underpriced) return 0;
 
   const db = getDB();
 
   const conditions: string[] = ["removed_at IS NULL"];
-  const args: import("@libsql/client").InValue[] = [];
+  const args: InValue[] = [];
 
   if (wd.category) {
     let cats: string[];
@@ -72,7 +79,7 @@ export async function scanExistingListings(wd: WatchdogConfig): Promise<number> 
   }
 
   const rows = await db.prepare(
-    `SELECT id, title, url, location, price, area_m2, dispozice FROM listings WHERE ${conditions.join(" AND ")} ORDER BY first_seen_at DESC LIMIT 500`
+    `SELECT id, title, url, location, price, area_m2, category, region_id, district_id, dispozice FROM listings WHERE ${conditions.join(" AND ")} ORDER BY first_seen_at DESC LIMIT 500`
   ).all(...args) as unknown as ListingRow[];
 
   let filtered = rows;
@@ -98,23 +105,130 @@ export async function scanExistingListings(wd: WatchdogConfig): Promise<number> 
 
   if (filtered.length === 0) return 0;
 
-  // Insert in batches of 50, skipping listings that already have a match for this watchdog
-  let inserted = 0;
-  const BATCH = 50;
-  for (let i = 0; i < filtered.length; i += BATCH) {
-    const chunk = filtered.slice(i, i + BATCH);
-    await db.batch(chunk.map(r => ({
-      sql: `INSERT INTO watchdog_matches (watchdog_id, listing_id, match_type, match_detail)
-            SELECT ?, ?, 'new', ?
-            WHERE NOT EXISTS (
-              SELECT 1 FROM watchdog_matches
-              WHERE watchdog_id = ? AND listing_id = ? AND match_type = 'new'
-            )`,
-      args: [wd.id, r.id, JSON.stringify({ price: r.price, area_m2: r.area_m2, location: r.location, source: "db_scan" }),
-             wd.id, r.id] as import("@libsql/client").InValue[],
-    })));
-    inserted += chunk.length;
+  const stmts: { sql: string; args: InValue[] }[] = [];
+
+  // 'new' matches
+  if (wd.watch_new) {
+    for (const r of filtered) {
+      stmts.push({
+        sql: `INSERT INTO watchdog_matches (watchdog_id, listing_id, match_type, match_detail)
+              SELECT ?, ?, 'new', ?
+              WHERE NOT EXISTS (
+                SELECT 1 FROM watchdog_matches
+                WHERE watchdog_id = ? AND listing_id = ? AND match_type = 'new'
+              )`,
+        args: [wd.id, r.id, JSON.stringify({ price: r.price, area_m2: r.area_m2, location: r.location, source: "db_scan" }),
+               wd.id, r.id],
+      });
+    }
   }
 
-  return inserted;
+  // 'underpriced' matches
+  if (wd.watch_underpriced) {
+    const minPct = wd.watch_underpriced_pct || 15;
+    const avgCache = new Map<string, number | null>();
+
+    for (const r of filtered) {
+      if (!r.area_m2 || r.area_m2 <= 0) continue;
+
+      const avgPriceM2 = await getCachedAvgPriceM2(db, r, avgCache);
+      if (avgPriceM2 === null) continue;
+
+      const listingPriceM2 = r.price / r.area_m2;
+      const diffPct = ((avgPriceM2 - listingPriceM2) / avgPriceM2) * 100;
+
+      if (diffPct >= minPct) {
+        stmts.push({
+          sql: `INSERT INTO watchdog_matches (watchdog_id, listing_id, match_type, match_detail)
+                SELECT ?, ?, 'underpriced', ?
+                WHERE NOT EXISTS (
+                  SELECT 1 FROM watchdog_matches
+                  WHERE watchdog_id = ? AND listing_id = ? AND match_type = 'underpriced'
+                )`,
+          args: [wd.id, r.id, JSON.stringify({
+                  avg_price_m2: Math.round(avgPriceM2),
+                  listing_price_m2: Math.round(listingPriceM2),
+                  diff_pct: Math.round(diffPct * 10) / 10,
+                  price: r.price,
+                  area_m2: r.area_m2,
+                  source: "db_scan",
+                }),
+                wd.id, r.id],
+        });
+      }
+    }
+  }
+
+  if (stmts.length === 0) return 0;
+
+  // Insert in batches of 50
+  const BATCH = 50;
+  for (let i = 0; i < stmts.length; i += BATCH) {
+    await db.batch(stmts.slice(i, i + BATCH));
+  }
+
+  return stmts.length;
+}
+
+// --- Underpriced helpers (mirrors scraper/src/watchdog.ts logic) ---
+
+function soldCategory(category: string): string {
+  if (category.startsWith("domy")) return "domy";
+  return "byty";
+}
+
+type DB = ReturnType<typeof getDB>;
+
+async function getAvgPriceM2(db: DB, listing: ListingRow): Promise<number | null> {
+  const cat = soldCategory(listing.category);
+
+  // 1. Ward
+  if (listing.district_id && listing.location) {
+    const wardName = listing.location.split(",")[0].trim();
+    const row = await db.prepare(
+      `SELECT h.avg_price_m2
+       FROM sold_price_history h
+       JOIN sold_wards w ON w.id = h.entity_id
+       WHERE h.entity_type = 'ward' AND h.category = ?
+         AND w.district_id = ? AND w.name = ?
+       ORDER BY h.year * 100 + h.month DESC LIMIT 1`
+    ).get(cat, listing.district_id, wardName) as unknown as { avg_price_m2: number } | undefined;
+    if (row?.avg_price_m2) return row.avg_price_m2;
+  }
+
+  // 2. District
+  if (listing.district_id) {
+    const row = await db.prepare(
+      `SELECT avg_price_m2 FROM sold_price_history
+       WHERE entity_type = 'district' AND entity_id = ? AND category = ?
+       ORDER BY year * 100 + month DESC LIMIT 1`
+    ).get(listing.district_id, cat) as unknown as { avg_price_m2: number } | undefined;
+    if (row?.avg_price_m2) return row.avg_price_m2;
+  }
+
+  // 3. Region
+  if (listing.region_id) {
+    const row = await db.prepare(
+      `SELECT avg_price_m2 FROM sold_price_history
+       WHERE entity_type = 'region' AND entity_id = ? AND category = ?
+       ORDER BY year * 100 + month DESC LIMIT 1`
+    ).get(listing.region_id, cat) as unknown as { avg_price_m2: number } | undefined;
+    if (row?.avg_price_m2) return row.avg_price_m2;
+  }
+
+  return null;
+}
+
+async function getCachedAvgPriceM2(
+  db: DB,
+  listing: ListingRow,
+  cache: Map<string, number | null>,
+): Promise<number | null> {
+  const wardName = listing.location ? listing.location.split(",")[0].trim() : "";
+  const cat = soldCategory(listing.category);
+  const key = `${cat}_${wardName}_${listing.district_id ?? "x"}_${listing.region_id ?? "x"}`;
+  if (cache.has(key)) return cache.get(key)!;
+  const result = await getAvgPriceM2(db, listing);
+  cache.set(key, result);
+  return result;
 }
