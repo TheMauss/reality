@@ -33,6 +33,8 @@ interface ListingRow {
  * Returns number of new matches inserted.
  */
 export async function scanExistingListings(wd: WatchdogConfig): Promise<number> {
+  if (!wd.watch_new) return 0;
+
   const db = getDB();
 
   const conditions: string[] = ["removed_at IS NULL"];
