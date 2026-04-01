@@ -18,6 +18,7 @@ interface Watchdog {
   price_m2_max: number | null;
   layout: string | null;
   keywords: string | null;
+  exclude_keywords: string | null;
   watch_new: number;
   watch_drops: number;
   watch_drops_min_pct: number;
@@ -250,6 +251,18 @@ function matchesFilter(listing: ParsedListing, wd: Watchdog): boolean {
           .join(" ")
           .toLowerCase();
         if (!keywords.some((kw) => text.includes(kw.toLowerCase()))) return false;
+      }
+    } catch { /* */ }
+  }
+
+  if (wd.exclude_keywords) {
+    try {
+      const excludes = JSON.parse(wd.exclude_keywords) as string[];
+      if (excludes.length > 0) {
+        const text = [listing.title, listing.location, listing.description || ""]
+          .join(" ")
+          .toLowerCase();
+        if (excludes.some((kw) => text.includes(kw.toLowerCase()))) return false;
       }
     } catch { /* */ }
   }

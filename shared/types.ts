@@ -55,6 +55,7 @@ export interface Watchdog {
   area_min: number | null;
   area_max: number | null;
   keywords: string | null; // JSON array
+  exclude_keywords: string | null; // JSON array
   watch_new: number;
   watch_drops: number;
   watch_drops_min_pct: number;

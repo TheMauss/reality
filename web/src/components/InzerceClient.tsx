@@ -798,7 +798,7 @@ export default function InzerceClient({ listings, total, pages, currentPage, sp,
                 {listings.length === 0 ? (
                   <div className="flex flex-1 items-center justify-center">
                     <div className="text-center space-y-2">
-                      <div className="text-3xl opacity-20">🏠</div>
+                      <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="0.7" className="mx-auto text-surface-4"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
                       <p className="text-sm text-muted">Žádné inzeráty</p>
                     </div>
                   </div>
@@ -861,8 +861,8 @@ export default function InzerceClient({ listings, total, pages, currentPage, sp,
           <div className="flex-1 overflow-y-auto">
             <div className="max-w-7xl mx-auto px-6 py-6">
               {listings.length === 0 ? (
-                <div className="flex flex-col items-center justify-center gap-4 rounded-2xl border border-border/60 bg-card py-20 text-center">
-                  <div className="text-5xl opacity-15">🏠</div>
+                <div className="flex flex-col items-center justify-center gap-4 rounded-xl border border-border/60 bg-card py-20 text-center">
+                  <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="0.7" className="mx-auto text-surface-4"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
                   <p className="text-base font-semibold text-foreground mb-1">Žádné výsledky</p>
                   <p className="text-sm text-muted">Zkuste upravit nebo zrušit filtry</p>
                 </div>
@@ -970,7 +970,7 @@ export default function InzerceClient({ listings, total, pages, currentPage, sp,
       {view === "map" ? (
         <div className="flex gap-4" style={{ height: "calc(100vh - 220px)", minHeight: 560 }}>
           {/* Left: listing cards */}
-          <div className="w-[42%] shrink-0 flex flex-col overflow-hidden rounded-2xl border border-border/70 bg-background">
+          <div className="w-[42%] shrink-0 flex flex-col overflow-hidden rounded-xl border border-border/70 bg-background">
             <div className="flex items-center justify-between gap-3 border-b border-border/60 px-4 py-3 shrink-0 bg-card/60 backdrop-blur-sm">
               <div className="text-sm font-semibold text-foreground">
                 {sp.location
@@ -991,7 +991,7 @@ export default function InzerceClient({ listings, total, pages, currentPage, sp,
               {listings.length === 0 ? (
                 <div className="flex flex-1 items-center justify-center">
                   <div className="text-center space-y-2">
-                    <div className="text-3xl opacity-20">🏠</div>
+                    <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="0.7" className="mx-auto text-surface-4"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
                     <p className="text-sm text-muted">Žádné inzeráty</p>
                   </div>
                 </div>
@@ -1037,7 +1037,7 @@ export default function InzerceClient({ listings, total, pages, currentPage, sp,
           </div>
 
           {/* Right: map */}
-          <div className="flex-1 min-w-0 flex flex-col overflow-hidden rounded-2xl border border-border/70">
+          <div className="flex-1 min-w-0 flex flex-col overflow-hidden rounded-xl border border-border/70">
             <div className="flex items-center justify-between gap-3 border-b border-border/60 bg-card/60 backdrop-blur-sm px-4 py-3 shrink-0">
               <div className="flex items-center gap-2">
                 <div className="h-2 w-2 rounded-full bg-accent animate-pulse" />
@@ -1065,8 +1065,8 @@ export default function InzerceClient({ listings, total, pages, currentPage, sp,
       ) : (
         <>
           {listings.length === 0 ? (
-            <div className="flex flex-col items-center justify-center gap-4 rounded-2xl border border-border/60 bg-card py-20 text-center">
-              <div className="text-5xl opacity-15">🏠</div>
+            <div className="flex flex-col items-center justify-center gap-4 rounded-xl border border-border/60 bg-card py-20 text-center">
+              <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="0.7" className="mx-auto text-surface-4"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
               <div>
                 <p className="text-base font-semibold text-foreground mb-1">Žádné výsledky</p>
                 <p className="text-sm text-muted">Zkuste upravit nebo zrušit filtry</p>

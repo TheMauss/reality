@@ -99,43 +99,43 @@ export default async function OkresPage({
 
       {/* Key metrics */}
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4 xl:grid-cols-7">
-        <div className="rounded-xl border border-border bg-card p-4">
+        <div className="rounded-xl border border-border bg-card p-4 transition-colors hover:border-border-hover hover:bg-surface-2">
           <div className="text-xs text-muted uppercase tracking-wider mb-1">Posl. prodejní</div>
           <div className="text-xl font-bold text-green">{fmt(lastHistoryPrice)}</div>
           <div className="text-xs text-muted mt-0.5">Kč/m²</div>
         </div>
-        <div className="rounded-xl border border-border bg-card p-4">
+        <div className="rounded-xl border border-border bg-card p-4 transition-colors hover:border-border-hover hover:bg-surface-2">
           <div className="text-xs text-muted uppercase tracking-wider mb-1">Nabídková</div>
           <div className="text-xl font-bold text-accent-light">{fmt(districtAskingM2)}</div>
           <div className="text-xs text-muted mt-0.5">Kč/m²</div>
         </div>
-        <div className="rounded-xl border border-border bg-card p-4">
+        <div className="rounded-xl border border-border bg-card p-4 transition-colors hover:border-border-hover hover:bg-surface-2">
           <div className="text-xs text-muted uppercase tracking-wider mb-1">Nájem avg.</div>
-          <div className="text-xl font-bold text-purple-400">{fmt(districtRentM2)}</div>
+          <div className="text-xl font-bold text-blue">{fmt(districtRentM2)}</div>
           <div className="text-xs text-muted mt-0.5">Kč/m²</div>
         </div>
-        <div className="rounded-xl border border-border bg-card p-4">
+        <div className="rounded-xl border border-border bg-card p-4 transition-colors hover:border-border-hover hover:bg-surface-2">
           <div className="text-xs text-muted uppercase tracking-wider mb-1">Yield</div>
-          <div className={`text-xl font-bold ${districtYield && districtYield > 5 ? "text-green" : districtYield && districtYield > 3 ? "text-amber-400" : "text-red"}`}>
+          <div className={`text-xl font-bold ${districtYield && districtYield > 5 ? "text-green" : districtYield && districtYield > 3 ? "text-amber" : "text-red"}`}>
             {districtYield ? `${districtYield.toFixed(1)}%` : "—"}
           </div>
           <div className="text-xs text-muted mt-0.5">roční výnosnost</div>
         </div>
-        <div className="rounded-xl border border-border bg-card p-4">
+        <div className="rounded-xl border border-border bg-card p-4 transition-colors hover:border-border-hover hover:bg-surface-2">
           <div className="text-xs text-muted uppercase tracking-wider mb-1">Spread</div>
-          <div className={`text-xl font-bold ${spread && spread > 15 ? "text-red" : "text-amber-400"}`}>
+          <div className={`text-xl font-bold ${spread && spread > 15 ? "text-red" : "text-amber"}`}>
             {spread != null ? `+${spread.toFixed(1)}%` : "—"}
           </div>
           <div className="text-xs text-muted mt-0.5">nabídka vs prodej</div>
         </div>
-        <div className="rounded-xl border border-border bg-card p-4">
+        <div className="rounded-xl border border-border bg-card p-4 transition-colors hover:border-border-hover hover:bg-surface-2">
           <div className="text-xs text-muted uppercase tracking-wider mb-1">Avg. DOM</div>
           <div className="text-xl font-bold">{districtAvgDom != null ? `${districtAvgDom} dní` : "—"}</div>
           <div className="text-xs text-muted mt-0.5">doba na trhu</div>
         </div>
-        <div className="rounded-xl border border-border bg-card p-4">
+        <div className="rounded-xl border border-border bg-card p-4 transition-colors hover:border-border-hover hover:bg-surface-2">
           <div className="text-xs text-muted uppercase tracking-wider mb-1">Pokles cen</div>
-          <div className={`text-xl font-bold ${districtDropRate && districtDropRate > 30 ? "text-green" : districtDropRate && districtDropRate > 15 ? "text-amber-400" : "text-muted"}`}>
+          <div className={`text-xl font-bold ${districtDropRate && districtDropRate > 30 ? "text-green" : districtDropRate && districtDropRate > 15 ? "text-amber" : "text-muted"}`}>
             {districtDropRate != null ? `${districtDropRate}%` : "—"}
           </div>
           <div className="text-xs text-muted mt-0.5">inzerátů snížilo cenu</div>

@@ -156,25 +156,25 @@ export default async function DataPage() {
 
       {/* Top-level metrics */}
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-6">
-        <div className="rounded-xl border border-border bg-card p-5">
+        <div className="rounded-xl border border-border bg-card p-5 transition-colors hover:border-border-hover hover:bg-surface-2">
           <div className="text-2xl font-bold text-green">
             {formatNum(avgSoldPrice)}
           </div>
           <div className="mt-1 text-sm text-muted">Posl. prodejní Kč/m² (ČR)</div>
         </div>
-        <div className="rounded-xl border border-border bg-card p-5">
+        <div className="rounded-xl border border-border bg-card p-5 transition-colors hover:border-border-hover hover:bg-surface-2">
           <div className="text-2xl font-bold text-accent-light">
             {formatNum(avgAskingPrice)}
           </div>
           <div className="mt-1 text-sm text-muted">Nabídková Kč/m² (ČR)</div>
         </div>
-        <div className="rounded-xl border border-border bg-card p-5">
-          <div className={`text-2xl font-bold ${avgSpread && avgSpread > 0 ? "text-amber-400" : "text-green"}`}>
+        <div className="rounded-xl border border-border bg-card p-5 transition-colors hover:border-border-hover hover:bg-surface-2">
+          <div className={`text-2xl font-bold ${avgSpread && avgSpread > 0 ? "text-amber" : "text-green"}`}>
             {avgSpread ? `+${avgSpread.toFixed(1)}%` : "—"}
           </div>
           <div className="mt-1 text-sm text-muted">Spread (ČR)</div>
         </div>
-        <div className="rounded-xl border border-border bg-card p-5">
+        <div className="rounded-xl border border-border bg-card p-5 transition-colors hover:border-border-hover hover:bg-surface-2">
           {countryYoy !== null ? (
             <div className={`text-2xl font-bold ${countryYoy >= 0 ? "text-green" : "text-red"}`}>
               {countryYoy >= 0 ? "+" : ""}{countryYoy.toFixed(1)}%
@@ -187,11 +187,11 @@ export default async function DataPage() {
             {latestPoint && <span className="block text-xs opacity-60">{String(latestPoint.month).padStart(2,"0")}/{latestPoint.year} vs –1 rok</span>}
           </div>
         </div>
-        <div className="rounded-xl border border-border bg-card p-5">
+        <div className="rounded-xl border border-border bg-card p-5 transition-colors hover:border-border-hover hover:bg-surface-2">
           <div className="text-2xl font-bold">{formatNum(totalSoldTransactions)}</div>
           <div className="mt-1 text-sm text-muted">Transakcí (celkem)</div>
         </div>
-        <div className="rounded-xl border border-border bg-card p-5">
+        <div className="rounded-xl border border-border bg-card p-5 transition-colors hover:border-border-hover hover:bg-surface-2">
           <div className="text-2xl font-bold">{formatNum(statsData.totalListings)}</div>
           <div className="mt-1 text-sm text-muted">Inzerátů</div>
         </div>
@@ -299,7 +299,7 @@ export default async function DataPage() {
                             r.spread! > 20
                               ? "bg-red/60"
                               : r.spread! > 0
-                                ? "bg-amber-400/60"
+                                ? "bg-amber/60"
                                 : "bg-green/60"
                           }`}
                           style={{ width: `${widthPct}%` }}
@@ -311,7 +311,7 @@ export default async function DataPage() {
                         r.spread! > 20
                           ? "text-red"
                           : r.spread! > 0
-                            ? "text-amber-400"
+                            ? "text-amber"
                             : "text-green"
                       }`}
                     >
@@ -374,7 +374,7 @@ export default async function DataPage() {
                             y.yield_pct > 5
                               ? "font-bold text-green"
                               : y.yield_pct > 3
-                                ? "font-bold text-amber-400"
+                                ? "font-bold text-amber"
                                 : "font-bold text-red"
                           }
                         >
@@ -437,7 +437,7 @@ export default async function DataPage() {
                       <td className="py-2.5 text-right text-muted">{formatNum(r.asking_m2)}</td>
                       <td className="py-2.5 text-right">
                         {r.spread !== null ? (
-                          <span className={`font-medium ${r.spread > 20 ? "text-red" : r.spread > 0 ? "text-amber-400" : "text-green"}`}>
+                          <span className={`font-medium ${r.spread > 20 ? "text-red" : r.spread > 0 ? "text-amber" : "text-green"}`}>
                             {r.spread > 0 ? "+" : ""}{r.spread.toFixed(1)}%
                           </span>
                         ) : <span className="text-muted">—</span>}
@@ -473,7 +473,7 @@ export default async function DataPage() {
             href="/mapa"
             className="rounded-lg bg-background p-4 text-center transition-colors hover:bg-background/80"
           >
-            <div className="text-lg font-bold text-amber-400">Mapa</div>
+            <div className="text-lg font-bold text-amber">Mapa</div>
             <div className="text-xs text-muted">Interaktivní mapa</div>
           </Link>
           <Link

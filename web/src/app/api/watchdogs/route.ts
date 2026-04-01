@@ -9,6 +9,7 @@ async function migrate(db: ReturnType<typeof getWriteDB>) {
     "ALTER TABLE watchdogs ADD COLUMN price_m2_min REAL",
     "ALTER TABLE watchdogs ADD COLUMN price_m2_max REAL",
     "ALTER TABLE watchdogs ADD COLUMN property_type TEXT",
+    "ALTER TABLE watchdogs ADD COLUMN exclude_keywords TEXT",
   ]) {
     try { await db.prepare(col).run(); } catch { /* column already exists */ }
   }
@@ -50,11 +51,11 @@ export async function POST(req: NextRequest) {
     `INSERT INTO watchdogs (
       user_id, name, category, property_type, region_id, district_id, location,
       price_min, price_max, area_min, area_max, price_m2_min, price_m2_max,
-      layout, keywords,
+      layout, keywords, exclude_keywords,
       watch_new, watch_drops, watch_drops_min_pct,
       watch_underpriced, watch_underpriced_pct, watch_returned,
       notify_email, notify_telegram, notify_frequency
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   ).run(
     session.user.id,
     body.name,
@@ -71,6 +72,7 @@ export async function POST(req: NextRequest) {
     body.price_m2_max || null,
     body.layout?.length ? JSON.stringify(body.layout) : null,
     body.keywords?.length ? JSON.stringify(body.keywords) : null,
+    body.exclude_keywords?.length ? JSON.stringify(body.exclude_keywords) : null,
     body.watch_new ?? 1,
     body.watch_drops ?? 0,
     body.watch_drops_min_pct ?? 5,

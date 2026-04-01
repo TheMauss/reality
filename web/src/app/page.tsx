@@ -20,6 +20,7 @@ interface Drop {
   category: string;
   area_m2: number | null;
   thumbs: string[];
+  vs_market_pct?: number | null;
 }
 
 /* ── Data fetching (direct DB queries) ────────────────────────── */
@@ -74,10 +75,16 @@ async function getDrops(sp: Record<string, string>) {
   const rows = await db
     .prepare(
       `SELECT pd.*, l.price as current_price, l.url as listing_url, l.first_seen_at,
+        l.district_id,
+        sd.avg_price_m2 as market_price_m2,
+        CASE WHEN sd.avg_price_m2 > 0 AND l.area_m2 > 0
+          THEN ROUND(((pd.new_price / l.area_m2) - sd.avg_price_m2) / sd.avg_price_m2 * 100, 1)
+          ELSE NULL END as vs_market_pct,
         (SELECT json_group_array(json_object('source', source, 'url', url))
          FROM listing_sources WHERE listing_id = l.id AND removed_at IS NULL) as sources_json
        FROM price_drops pd
        LEFT JOIN listings l ON l.id = pd.listing_id
+       LEFT JOIN sold_districts sd ON sd.id = l.district_id
        ${where}
        ORDER BY pd.detected_at DESC
        LIMIT ? OFFSET ?`
@@ -97,10 +104,16 @@ async function getHotDrops(): Promise<Drop[]> {
   const rows = await db
     .prepare(
       `SELECT pd.*, l.price as current_price, l.url as listing_url, l.first_seen_at,
+        l.district_id,
+        sd.avg_price_m2 as market_price_m2,
+        CASE WHEN sd.avg_price_m2 > 0 AND l.area_m2 > 0
+          THEN ROUND(((pd.new_price / l.area_m2) - sd.avg_price_m2) / sd.avg_price_m2 * 100, 1)
+          ELSE NULL END as vs_market_pct,
         (SELECT json_group_array(json_object('source', source, 'url', url))
          FROM listing_sources WHERE listing_id = l.id AND removed_at IS NULL) as sources_json
        FROM price_drops pd
        LEFT JOIN listings l ON l.id = pd.listing_id
+       LEFT JOIN sold_districts sd ON sd.id = l.district_id
        WHERE pd.drop_pct >= 8
        ORDER BY pd.detected_at DESC
        LIMIT 6`
@@ -321,8 +334,10 @@ export default async function Home({
         ) : (
           <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
             {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
-            {dropsData.drops?.map((drop: any) => (
-              <PriceDropCard key={drop.id} drop={drop} />
+            {dropsData.drops?.map((drop: any, i: number) => (
+              <div key={drop.id} className="animate-fade-up" style={{ animationDelay: `${Math.min(i, 8) * 0.04}s` }}>
+                <PriceDropCard drop={drop} />
+              </div>
             ))}
           </div>
         )}

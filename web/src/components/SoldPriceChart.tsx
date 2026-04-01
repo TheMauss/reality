@@ -77,20 +77,20 @@ export default function SoldPriceChart({
           <div className="text-sm text-muted">
             Změna {tfMonths === 0 ? `od ${changeFromLabel}` : `za ${tfLabel}`}
           </div>
-          <div className={`text-2xl font-bold ${totalChange >= 0 ? "text-green-400" : "text-red-400"}`}>
+          <div className={`text-2xl font-bold ${totalChange >= 0 ? "text-green" : "text-red"}`}>
             {totalChange >= 0 ? "+" : ""}{totalChange.toFixed(1)}%
           </div>
         </div>
         {askingPriceM2 && (
           <div>
             <div className="text-sm text-muted">Nabídková cena (prům.)</div>
-            <div className="text-2xl font-bold text-indigo-400">{formatNum(askingPriceM2)} Kč/m²</div>
+            <div className="text-2xl font-bold text-accent-light">{formatNum(askingPriceM2)} Kč/m²</div>
           </div>
         )}
         {askingPriceM2 && (
           <div>
             <div className="text-sm text-muted">Spread (nabídka vs prodej)</div>
-            <div className="text-2xl font-bold text-amber-400">
+            <div className="text-2xl font-bold text-amber">
               {askingPriceM2 > lastPrice ? "+" : ""}
               {(((askingPriceM2 - lastPrice) / lastPrice) * 100).toFixed(1)}%
             </div>

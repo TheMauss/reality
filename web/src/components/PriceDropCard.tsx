@@ -18,6 +18,7 @@ interface PriceDrop {
   category: string;
   area_m2: number | null;
   sources_json?: string;
+  vs_market_pct?: number | null;
 }
 
 const SOURCE_NAME: Record<string, string> = {
@@ -177,6 +178,20 @@ export default function PriceDropCard({ drop }: { drop: PriceDrop }) {
           </div>
           <span className="shrink-0">{CAT_LABEL[drop.category] ?? drop.category}</span>
         </div>
+
+        {/* Market comparison */}
+        {drop.vs_market_pct != null && (
+          <div className={`flex items-center gap-1.5 text-[11px] ${
+            drop.vs_market_pct <= -5 ? "text-green" : drop.vs_market_pct >= 10 ? "text-red" : "text-text-tertiary"
+          }`}>
+            <span className={`h-1.5 w-1.5 rounded-full ${
+              drop.vs_market_pct <= -5 ? "bg-green" : drop.vs_market_pct >= 10 ? "bg-red" : "bg-text-tertiary"
+            }`} />
+            <span className="font-medium tabular-nums">
+              {drop.vs_market_pct > 0 ? "+" : ""}{drop.vs_market_pct}% vs katastr
+            </span>
+          </div>
+        )}
 
         {/* Savings + Actions */}
         <div className="flex items-center justify-between pt-3 border-t border-border">

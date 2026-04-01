@@ -239,7 +239,7 @@ export default async function TrhPrahaPage() {
         </div>
         <div className="rounded-xl border border-border bg-card p-5">
           <div
-            className={`text-2xl font-bold ${globalSpread && globalSpread > 0 ? "text-amber-400" : "text-green"}`}
+            className={`text-2xl font-bold ${globalSpread && globalSpread > 0 ? "text-amber" : "text-green"}`}
           >
             {globalSpread ? `+${globalSpread.toFixed(1)}%` : "—"}
           </div>
@@ -310,7 +310,7 @@ export default async function TrhPrahaPage() {
                             d.spread > 20
                               ? "text-red"
                               : d.spread > 0
-                                ? "text-amber-400"
+                                ? "text-amber"
                                 : "text-green"
                           }
                         >
@@ -370,7 +370,7 @@ export default async function TrhPrahaPage() {
                             d.spread! > 20
                               ? "bg-red/60"
                               : d.spread! > 0
-                                ? "bg-amber-400/60"
+                                ? "bg-amber/60"
                                 : "bg-green/60"
                           }`}
                           style={{ width: `${widthPct}%` }}
@@ -382,7 +382,7 @@ export default async function TrhPrahaPage() {
                         d.spread! > 20
                           ? "text-red"
                           : d.spread! > 0
-                            ? "text-amber-400"
+                            ? "text-amber"
                             : "text-green"
                       }`}
                     >

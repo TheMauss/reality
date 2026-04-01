@@ -643,7 +643,7 @@ export default function SearchHero({ activeCategory, activeLocation }: Props) {
 
         {/* Search + autocomplete */}
         <div ref={wrapperRef} className="relative">
-          <form onSubmit={handleSubmit} className="flex gap-0 rounded-lg border border-border bg-background focus-within:border-accent focus-within:shadow-[0_0_0_3px_rgba(59,130,246,0.08)] transition-all">
+          <form onSubmit={handleSubmit} className="flex gap-0 rounded-lg border border-border bg-background focus-within:border-accent focus-within:shadow-[0_0_0_3px_rgba(166,139,60,0.1)] transition-all">
             {/* Location icon */}
             <div className="flex items-center pl-4 shrink-0 pointer-events-none">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-text-tertiary">

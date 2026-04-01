@@ -175,7 +175,7 @@ function StarRating({ rating }: { rating: number }) {
   const full = Math.floor(rating);
   const hasHalf = rating - full >= 0.5;
   return (
-    <span className="text-yellow-400 text-sm tracking-tight" aria-label={`${rating} hvězd`}>
+    <span className="text-amber text-sm tracking-tight" aria-label={`${rating} hvězd`}>
       {Array.from({ length: 5 }, (_, i) => {
         if (i < full) return "★";
         if (i === full && hasHalf) return "½";
@@ -195,7 +195,7 @@ export default function ProdejPage() {
       <div className="relative overflow-hidden rounded-2xl border border-border bg-gradient-to-br from-card via-card to-accent/5 px-6 py-10 md:px-10 md:py-14">
         {/* Decorative blobs */}
         <div className="pointer-events-none absolute -right-24 -top-24 h-80 w-80 rounded-full bg-accent/6 blur-3xl" />
-        <div className="pointer-events-none absolute bottom-0 left-1/3 h-56 w-56 rounded-full bg-purple-600/5 blur-2xl" />
+        <div className="pointer-events-none absolute bottom-0 left-1/3 h-56 w-56 rounded-full bg-accent/5 blur-2xl" />
 
         <div className="relative grid gap-10 lg:grid-cols-2 lg:items-center">
           {/* Left */}
@@ -206,7 +206,7 @@ export default function ProdejPage() {
             </div>
             <h1 className="text-4xl font-bold tracking-tight md:text-5xl leading-tight">
               Prodejte za{" "}
-              <span className="bg-gradient-to-r from-accent-light via-purple-400 to-pink-400 bg-clip-text text-transparent">
+              <span className="text-gradient">
                 nejlepší cenu
               </span>{" "}
               na trhu
@@ -216,7 +216,7 @@ export default function ProdejPage() {
             </p>
 
             {/* Trust stats */}
-            <div className="mt-6 grid grid-cols-3 gap-4">
+            <div className="mt-6 grid grid-cols-1 sm:grid-cols-3 gap-3">
               {[
                 { value: "47 prodejů", label: "průměrně ročně" },
                 { value: "3–6 týdnů", label: "průměrná doba prodeje" },
@@ -368,7 +368,7 @@ export default function ProdejPage() {
           {SELLING_OPTIONS.map((opt) => (
             <div
               key={opt.label}
-              className="group flex flex-col overflow-hidden rounded-2xl border border-border bg-card transition-all hover:border-accent/30 hover:shadow-xl hover:shadow-black/30"
+              className="group flex flex-col overflow-hidden rounded-xl border border-border bg-card transition-all hover:border-accent/30 hover:shadow-xl hover:shadow-black/30"
             >
               {/* Thick colored top border */}
               <div className="h-1.5" style={{ background: opt.tagColor }} />

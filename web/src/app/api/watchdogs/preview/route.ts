@@ -11,7 +11,7 @@ export async function POST(req: NextRequest) {
     categories, property_type, district_id, region_id, location,
     price_min, price_max, area_min, area_max,
     price_m2_min, price_m2_max,
-    layout, keywords,
+    layout, keywords, exclude_keywords,
   } = body;
 
   const db = getDB();
@@ -55,6 +55,12 @@ export async function POST(req: NextRequest) {
   if (keywords && Array.isArray(keywords) && keywords.length > 0) {
     filtered = filtered.filter(r =>
       keywords.some((kw: string) => r.title.toLowerCase().includes(kw.toLowerCase()) || r.location.toLowerCase().includes(kw.toLowerCase()))
+    );
+  }
+
+  if (exclude_keywords && Array.isArray(exclude_keywords) && exclude_keywords.length > 0) {
+    filtered = filtered.filter(r =>
+      !exclude_keywords.some((kw: string) => r.title.toLowerCase().includes(kw.toLowerCase()) || r.location.toLowerCase().includes(kw.toLowerCase()))
     );
   }
 

@@ -20,6 +20,7 @@ interface Listing {
   price_m2: number | null;
   first_seen_at: string;
   sources_json?: string;
+  vs_market_pct?: number | null;
 }
 
 const SOURCE_LABEL: Record<string, string> = {
@@ -249,6 +250,20 @@ export default function ListingCard({ listing, compact = false }: { listing: Lis
 
         {listing.location && (
           <p className="text-[11px] text-text-tertiary truncate">{listing.location}</p>
+        )}
+
+        {/* Market comparison */}
+        {listing.vs_market_pct != null && (
+          <div className={`flex items-center gap-1.5 text-[11px] ${
+            listing.vs_market_pct <= -5 ? "text-green" : listing.vs_market_pct >= 10 ? "text-red" : "text-text-tertiary"
+          }`}>
+            <span className={`h-1.5 w-1.5 rounded-full ${
+              listing.vs_market_pct <= -5 ? "bg-green" : listing.vs_market_pct >= 10 ? "bg-red" : "bg-text-tertiary"
+            }`} />
+            <span className="font-medium tabular-nums">
+              {listing.vs_market_pct > 0 ? "+" : ""}{listing.vs_market_pct}% vs katastr
+            </span>
+          </div>
         )}
 
         {/* Footer */}

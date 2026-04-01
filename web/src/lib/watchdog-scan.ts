@@ -16,6 +16,7 @@ interface WatchdogConfig {
   price_m2_max: number | null;
   layout: string | null;
   keywords: string | null;
+  exclude_keywords: string | null;
   watch_new: number;
   watch_underpriced: number;
   watch_underpriced_pct: number;
@@ -97,6 +98,17 @@ export async function scanExistingListings(wd: WatchdogConfig): Promise<number> 
       const kws = JSON.parse(wd.keywords) as string[];
       if (kws.length > 0)
         filtered = filtered.filter(r => kws.some(kw =>
+          r.title.toLowerCase().includes(kw.toLowerCase()) ||
+          r.location.toLowerCase().includes(kw.toLowerCase())
+        ));
+    } catch { /* */ }
+  }
+
+  if (wd.exclude_keywords) {
+    try {
+      const excludes = JSON.parse(wd.exclude_keywords) as string[];
+      if (excludes.length > 0)
+        filtered = filtered.filter(r => !excludes.some(kw =>
           r.title.toLowerCase().includes(kw.toLowerCase()) ||
           r.location.toLowerCase().includes(kw.toLowerCase())
         ));

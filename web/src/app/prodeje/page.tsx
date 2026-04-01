@@ -39,10 +39,10 @@ function fmt(n: number | null | undefined): string {
 }
 
 function priceBg(p: number): string {
-  if (p < 50000) return "bg-emerald-500/10 text-emerald-400";
-  if (p < 80000) return "bg-yellow-500/10 text-yellow-400";
-  if (p < 110000) return "bg-orange-500/10 text-orange-400";
-  return "bg-red-500/10 text-red-400";
+  if (p < 50000) return "bg-green-dim text-green";
+  if (p < 80000) return "bg-amber/10 text-amber";
+  if (p < 110000) return "bg-red-dim text-red";
+  return "bg-red/20 text-red";
 }
 
 export default async function ProdejePage() {
@@ -126,48 +126,48 @@ export default async function ProdejePage() {
 
       {/* Key metrics */}
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4 xl:grid-cols-8">
-        <div className="rounded-xl border border-border bg-card p-4">
+        <div className="rounded-xl border border-border bg-card p-4 transition-colors hover:border-border-hover hover:bg-surface-2">
           <div className="text-xs text-muted uppercase tracking-wider mb-1">Posl. prodejní</div>
           <div className="text-xl font-bold text-green">{fmt(avgPrice)}</div>
           <div className="text-xs text-muted mt-0.5">Kč/m²</div>
         </div>
-        <div className="rounded-xl border border-border bg-card p-4">
+        <div className="rounded-xl border border-border bg-card p-4 transition-colors hover:border-border-hover hover:bg-surface-2">
           <div className="text-xs text-muted uppercase tracking-wider mb-1">Nabídková</div>
           <div className="text-xl font-bold text-accent-light">{fmt(nationalAskingM2)}</div>
           <div className="text-xs text-muted mt-0.5">Kč/m²</div>
         </div>
-        <div className="rounded-xl border border-border bg-card p-4">
+        <div className="rounded-xl border border-border bg-card p-4 transition-colors hover:border-border-hover hover:bg-surface-2">
           <div className="text-xs text-muted uppercase tracking-wider mb-1">Nájem avg.</div>
-          <div className="text-xl font-bold text-purple-400">{fmt(nationalRentM2)}</div>
+          <div className="text-xl font-bold text-blue">{fmt(nationalRentM2)}</div>
           <div className="text-xs text-muted mt-0.5">Kč/m²</div>
         </div>
-        <div className="rounded-xl border border-border bg-card p-4">
+        <div className="rounded-xl border border-border bg-card p-4 transition-colors hover:border-border-hover hover:bg-surface-2">
           <div className="text-xs text-muted uppercase tracking-wider mb-1">Spread</div>
-          <div className={`text-xl font-bold ${spread && spread > 15 ? "text-red" : "text-amber-400"}`}>
+          <div className={`text-xl font-bold ${spread && spread > 15 ? "text-red" : "text-amber"}`}>
             {spread != null ? `+${spread.toFixed(1)}%` : "—"}
           </div>
           <div className="text-xs text-muted mt-0.5">nabídka vs prodej</div>
         </div>
-        <div className="rounded-xl border border-border bg-card p-4">
+        <div className="rounded-xl border border-border bg-card p-4 transition-colors hover:border-border-hover hover:bg-surface-2">
           <div className="text-xs text-muted uppercase tracking-wider mb-1">Yield (ČR)</div>
-          <div className={`text-xl font-bold ${nationalYield && nationalYield > 5 ? "text-green" : nationalYield && nationalYield > 3 ? "text-amber-400" : "text-red"}`}>
+          <div className={`text-xl font-bold ${nationalYield && nationalYield > 5 ? "text-green" : nationalYield && nationalYield > 3 ? "text-amber" : "text-red"}`}>
             {nationalYield ? `${nationalYield.toFixed(1)}%` : "—"}
           </div>
           <div className="text-xs text-muted mt-0.5">roční výnosnost</div>
         </div>
-        <div className="rounded-xl border border-border bg-card p-4">
+        <div className="rounded-xl border border-border bg-card p-4 transition-colors hover:border-border-hover hover:bg-surface-2">
           <div className="text-xs text-muted uppercase tracking-wider mb-1">Aktivní inzeráty</div>
           <div className="text-xl font-bold text-accent-light">{fmt(totalListings)}</div>
           <div className="text-xs text-muted mt-0.5">bytů na prodej</div>
         </div>
-        <div className="rounded-xl border border-border bg-card p-4">
+        <div className="rounded-xl border border-border bg-card p-4 transition-colors hover:border-border-hover hover:bg-surface-2">
           <div className="text-xs text-muted uppercase tracking-wider mb-1">Avg. DOM</div>
           <div className="text-xl font-bold">{nationalAvgDom != null ? `${nationalAvgDom} dní` : "—"}</div>
           <div className="text-xs text-muted mt-0.5">doba na trhu</div>
         </div>
-        <div className="rounded-xl border border-border bg-card p-4">
+        <div className="rounded-xl border border-border bg-card p-4 transition-colors hover:border-border-hover hover:bg-surface-2">
           <div className="text-xs text-muted uppercase tracking-wider mb-1">Pokles cen</div>
-          <div className={`text-xl font-bold ${nationalDropRate && nationalDropRate > 30 ? "text-green" : nationalDropRate && nationalDropRate > 15 ? "text-amber-400" : "text-muted"}`}>
+          <div className={`text-xl font-bold ${nationalDropRate && nationalDropRate > 30 ? "text-green" : nationalDropRate && nationalDropRate > 15 ? "text-amber" : "text-muted"}`}>
             {nationalDropRate != null ? `${nationalDropRate}%` : "—"}
           </div>
           <div className="text-xs text-muted mt-0.5">inzerátů snížilo cenu</div>
@@ -238,18 +238,18 @@ export default async function ProdejePage() {
                         <span className="text-accent-light font-semibold">{fmt(r.asking_m2)}</span>
                       </td>
                       <td className="px-4 py-4 text-right">
-                        <span className="text-purple-400 font-semibold">{rent ? fmt(rent.rent_m2) : "—"}</span>
+                        <span className="text-blue font-semibold">{rent ? fmt(rent.rent_m2) : "—"}</span>
                       </td>
                       <td className="px-4 py-4 text-right">
                         {rent?.yield_pct ? (
-                          <span className={`text-sm font-bold ${rent.yield_pct > 5 ? "text-green" : rent.yield_pct > 3 ? "text-amber-400" : "text-red"}`}>
+                          <span className={`text-sm font-bold ${rent.yield_pct > 5 ? "text-green" : rent.yield_pct > 3 ? "text-amber" : "text-red"}`}>
                             {rent.yield_pct.toFixed(1)}%
                           </span>
                         ) : "—"}
                       </td>
                       <td className="px-4 py-4 text-right">
                         {r.spread !== null ? (
-                          <span className={`text-sm font-medium ${r.spread > 20 ? "text-red" : r.spread > 10 ? "text-amber-400" : "text-green"}`}>
+                          <span className={`text-sm font-medium ${r.spread > 20 ? "text-red" : r.spread > 10 ? "text-amber" : "text-green"}`}>
                             {r.spread > 0 ? "+" : ""}{r.spread.toFixed(1)}%
                           </span>
                         ) : "—"}
@@ -260,7 +260,7 @@ export default async function ProdejePage() {
                             <div className="text-muted">{Math.round(r.avg_dom)} dní</div>
                           )}
                           {r.drop_rate_pct != null && (
-                            <div className={r.drop_rate_pct > 25 ? "text-green" : r.drop_rate_pct > 10 ? "text-amber-400" : "text-muted"}>
+                            <div className={r.drop_rate_pct > 25 ? "text-green" : r.drop_rate_pct > 10 ? "text-amber" : "text-muted"}>
                               {r.drop_rate_pct}% poklesů
                             </div>
                           )}

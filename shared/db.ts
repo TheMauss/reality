@@ -83,6 +83,7 @@ function initSchema(db: Database.Database) {
       area_min REAL,
       area_max REAL,
       keywords TEXT,
+      exclude_keywords TEXT,
       watch_new INTEGER NOT NULL DEFAULT 1,
       watch_drops INTEGER NOT NULL DEFAULT 0,
       watch_drops_min_pct REAL DEFAULT 5,

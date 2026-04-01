@@ -31,10 +31,10 @@ function fmt(n: number | null | undefined): string {
 }
 
 function priceBg(p: number): string {
-  if (p < 50000) return "bg-emerald-500/10 text-emerald-400";
-  if (p < 80000) return "bg-yellow-500/10 text-yellow-400";
-  if (p < 110000) return "bg-orange-500/10 text-orange-400";
-  return "bg-red-500/10 text-red-400";
+  if (p < 50000) return "bg-green-dim text-green";
+  if (p < 80000) return "bg-amber/10 text-amber";
+  if (p < 110000) return "bg-red-dim text-red";
+  return "bg-red/20 text-red";
 }
 
 export default async function KrajPage({
@@ -120,43 +120,43 @@ export default async function KrajPage({
           : null;
         return (
           <div className="grid grid-cols-2 gap-3 lg:grid-cols-4 xl:grid-cols-7">
-            <div className="rounded-xl border border-border bg-card p-4">
+            <div className="rounded-xl border border-border bg-card p-4 transition-colors hover:border-border-hover hover:bg-surface-2">
               <div className="text-xs text-muted uppercase tracking-wider mb-1">Posl. prodejní</div>
               <div className="text-xl font-bold text-green">{fmt(lastHistoryPrice)}</div>
               <div className="text-xs text-muted mt-0.5">Kč/m²</div>
             </div>
-            <div className="rounded-xl border border-border bg-card p-4">
+            <div className="rounded-xl border border-border bg-card p-4 transition-colors hover:border-border-hover hover:bg-surface-2">
               <div className="text-xs text-muted uppercase tracking-wider mb-1">Nabídková</div>
               <div className="text-xl font-bold text-accent-light">{fmt(regionAskingM2)}</div>
               <div className="text-xs text-muted mt-0.5">Kč/m²</div>
             </div>
-            <div className="rounded-xl border border-border bg-card p-4">
+            <div className="rounded-xl border border-border bg-card p-4 transition-colors hover:border-border-hover hover:bg-surface-2">
               <div className="text-xs text-muted uppercase tracking-wider mb-1">Nájem avg.</div>
-              <div className="text-xl font-bold text-purple-400">{fmt(regionRentM2)}</div>
+              <div className="text-xl font-bold text-blue">{fmt(regionRentM2)}</div>
               <div className="text-xs text-muted mt-0.5">Kč/m²</div>
             </div>
-            <div className="rounded-xl border border-border bg-card p-4">
+            <div className="rounded-xl border border-border bg-card p-4 transition-colors hover:border-border-hover hover:bg-surface-2">
               <div className="text-xs text-muted uppercase tracking-wider mb-1">Yield</div>
-              <div className={`text-xl font-bold ${regionYield && regionYield > 5 ? "text-green" : regionYield && regionYield > 3 ? "text-amber-400" : "text-red"}`}>
+              <div className={`text-xl font-bold ${regionYield && regionYield > 5 ? "text-green" : regionYield && regionYield > 3 ? "text-amber" : "text-red"}`}>
                 {regionYield ? `${regionYield.toFixed(1)}%` : "—"}
               </div>
               <div className="text-xs text-muted mt-0.5">roční výnosnost</div>
             </div>
-            <div className="rounded-xl border border-border bg-card p-4">
+            <div className="rounded-xl border border-border bg-card p-4 transition-colors hover:border-border-hover hover:bg-surface-2">
               <div className="text-xs text-muted uppercase tracking-wider mb-1">Spread</div>
-              <div className={`text-xl font-bold ${spread && spread > 15 ? "text-red" : "text-amber-400"}`}>
+              <div className={`text-xl font-bold ${spread && spread > 15 ? "text-red" : "text-amber"}`}>
                 {spread != null ? `+${spread.toFixed(1)}%` : "—"}
               </div>
               <div className="text-xs text-muted mt-0.5">nabídka vs prodej</div>
             </div>
-            <div className="rounded-xl border border-border bg-card p-4">
+            <div className="rounded-xl border border-border bg-card p-4 transition-colors hover:border-border-hover hover:bg-surface-2">
               <div className="text-xs text-muted uppercase tracking-wider mb-1">Avg. DOM</div>
               <div className="text-xl font-bold">{regionAvgDom != null ? `${regionAvgDom} dní` : "—"}</div>
               <div className="text-xs text-muted mt-0.5">doba na trhu</div>
             </div>
-            <div className="rounded-xl border border-border bg-card p-4">
+            <div className="rounded-xl border border-border bg-card p-4 transition-colors hover:border-border-hover hover:bg-surface-2">
               <div className="text-xs text-muted uppercase tracking-wider mb-1">Pokles cen</div>
-              <div className={`text-xl font-bold ${regionDropRate && regionDropRate > 30 ? "text-green" : regionDropRate && regionDropRate > 15 ? "text-amber-400" : "text-muted"}`}>
+              <div className={`text-xl font-bold ${regionDropRate && regionDropRate > 30 ? "text-green" : regionDropRate && regionDropRate > 15 ? "text-amber" : "text-muted"}`}>
                 {regionDropRate != null ? `${regionDropRate}%` : "—"}
               </div>
               <div className="text-xs text-muted mt-0.5">inzerátů snížilo cenu</div>
@@ -213,18 +213,18 @@ export default async function KrajPage({
                       <span className="text-accent-light font-semibold">{fmt(d.asking_m2)}</span>
                     </td>
                     <td className="px-4 py-4 text-right">
-                      <span className="text-purple-400 font-semibold">{fmt(d.rent_m2)}</span>
+                      <span className="text-blue font-semibold">{fmt(d.rent_m2)}</span>
                     </td>
                     <td className="px-4 py-4 text-right">
                       {d.yield_pct != null ? (
-                        <span className={`text-sm font-bold ${d.yield_pct > 5 ? "text-green" : d.yield_pct > 3 ? "text-amber-400" : "text-red"}`}>
+                        <span className={`text-sm font-bold ${d.yield_pct > 5 ? "text-green" : d.yield_pct > 3 ? "text-amber" : "text-red"}`}>
                           {d.yield_pct.toFixed(1)}%
                         </span>
                       ) : "—"}
                     </td>
                     <td className="px-4 py-4 text-right">
                       {d.spread !== null ? (
-                        <span className={`text-sm font-medium ${d.spread > 20 ? "text-red" : d.spread > 10 ? "text-amber-400" : "text-green"}`}>
+                        <span className={`text-sm font-medium ${d.spread > 20 ? "text-red" : d.spread > 10 ? "text-amber" : "text-green"}`}>
                           {d.spread > 0 ? "+" : ""}{d.spread.toFixed(1)}%
                         </span>
                       ) : "—"}
@@ -233,7 +233,7 @@ export default async function KrajPage({
                       <div className="text-xs space-y-0.5">
                         {d.avg_dom != null && <div className="text-muted">{Math.round(d.avg_dom)} dní</div>}
                         {d.drop_rate_pct != null && (
-                          <div className={d.drop_rate_pct > 25 ? "text-green" : d.drop_rate_pct > 10 ? "text-amber-400" : "text-muted"}>
+                          <div className={d.drop_rate_pct > 25 ? "text-green" : d.drop_rate_pct > 10 ? "text-amber" : "text-muted"}>
                             {d.drop_rate_pct}% poklesů
                           </div>
                         )}

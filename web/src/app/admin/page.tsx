@@ -101,7 +101,7 @@ export default function AdminPage() {
           { label: "Aktivních", value: activeWds },
           { label: "Celkem shod", value: totalMatches },
         ].map(s => (
-          <div key={s.label} className="rounded-2xl border border-border bg-card p-4">
+          <div key={s.label} className="rounded-lg border border-border bg-card p-4">
             <div className="text-2xl font-bold tabular-nums">{s.value}</div>
             <div className="text-xs text-muted mt-0.5">{s.label}</div>
           </div>
@@ -111,7 +111,7 @@ export default function AdminPage() {
       {/* Users */}
       <div>
         <h2 className="text-base font-semibold mb-3">Uživatelé ({users.length})</h2>
-        <div className="rounded-2xl border border-border bg-card overflow-hidden">
+        <div className="rounded-lg border border-border bg-card overflow-hidden">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-border text-xs text-muted">
@@ -129,7 +129,7 @@ export default function AdminPage() {
                     <td className="px-4 py-2.5 font-medium">{u.email}</td>
                     <td className="px-4 py-2.5">
                       {u.telegram_id
-                        ? <span className="text-green-400 font-mono text-xs">{u.telegram_id}</span>
+                        ? <span className="text-green font-mono text-xs">{u.telegram_id}</span>
                         : <span className="text-muted/40 text-xs">—</span>}
                     </td>
                     <td className="px-4 py-2.5 tabular-nums">{wds.length}</td>
@@ -145,7 +145,7 @@ export default function AdminPage() {
       {/* Watchdogs */}
       <div>
         <h2 className="text-base font-semibold mb-3">Hlídací psi ({watchdogs.length})</h2>
-        <div className="rounded-2xl border border-border bg-card overflow-hidden">
+        <div className="rounded-lg border border-border bg-card overflow-hidden">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-border text-xs text-muted">
@@ -177,7 +177,7 @@ export default function AdminPage() {
                   </td>
                   <td className="px-4 py-2.5 tabular-nums font-bold text-accent-light">{w.match_count}</td>
                   <td className="px-4 py-2.5">
-                    <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${w.active ? "bg-green-500/15 text-green-400" : "bg-border/40 text-muted"}`}>
+                    <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${w.active ? "bg-green-dim text-green" : "bg-border/40 text-muted"}`}>
                       {w.active ? "Aktivní" : "Pozastavený"}
                     </span>
                   </td>

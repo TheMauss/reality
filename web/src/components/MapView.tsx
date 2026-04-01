@@ -432,7 +432,7 @@ export default function MapView() {
                           <div className="truncate text-sm font-medium text-foreground">{p.name}</div>
                           <div className="truncate text-xs text-muted">{p.context}</div>
                         </div>
-                        <span className="mt-0.5 shrink-0 rounded px-1.5 py-0.5 text-xs font-medium bg-indigo-900/40 text-indigo-300">
+                        <span className="mt-0.5 shrink-0 rounded px-1.5 py-0.5 text-xs font-medium bg-accent-dim text-accent-light">
                           {p.type}
                         </span>
                       </button>
@@ -454,7 +454,7 @@ export default function MapView() {
                             <div className="truncate text-sm font-medium text-foreground">{name}</div>
                             <div className="truncate text-xs text-muted">{ctx} · {item.cnt} inzerátů</div>
                           </div>
-                          <span className="mt-0.5 shrink-0 rounded px-1.5 py-0.5 text-xs font-medium bg-teal-900/40 text-teal-300">
+                          <span className="mt-0.5 shrink-0 rounded px-1.5 py-0.5 text-xs font-medium bg-blue/10 text-blue">
                             Ulice
                           </span>
                         </button>

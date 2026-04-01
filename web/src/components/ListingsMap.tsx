@@ -25,11 +25,11 @@ function formatPriceShort(p: number): string {
 
 function getCategoryColor(cat: string): string {
   switch (cat) {
-    case "byty-prodej": return "#818cf8";
-    case "byty-najem": return "#22c55e";
-    case "domy-prodej": return "#f97316";
-    case "domy-najem": return "#eab308";
-    default: return "#6b7280";
+    case "byty-prodej": return "#A68B3C";
+    case "byty-najem": return "#5EBD72";
+    case "domy-prodej": return "#5B8DD9";
+    case "domy-najem": return "#D4A843";
+    default: return "#5C584F";
   }
 }
 
@@ -38,13 +38,14 @@ function createPricePin(price: number, color: string, selected = false): L.DivIc
   return L.divIcon({
     className: "",
     html: `<div style="
-      background:${color};color:#fff;
-      padding:${selected ? "3px 9px" : "2px 7px"};border-radius:4px;
+      background:${selected ? "#F5F0EB" : color};color:${selected ? "#0A0A0B" : "#fff"};
+      padding:${selected ? "3px 10px" : "2px 8px"};border-radius:99px;
       font-size:${selected ? "12px" : "11px"};font-weight:700;font-family:system-ui,sans-serif;
-      white-space:nowrap;
-      box-shadow:${selected ? "0 0 0 2px #fff,0 3px 8px rgba(0,0,0,0.7)" : "0 2px 5px rgba(0,0,0,0.5)"};
+      white-space:nowrap;letter-spacing:-0.01em;
+      box-shadow:${selected ? "0 0 0 2px " + color + ",0 4px 12px rgba(0,0,0,0.5)" : "0 2px 6px rgba(0,0,0,0.4)"};
       line-height:1.5;pointer-events:none;
-      transform:${selected ? "scale(1.15)" : "scale(1)"};transform-origin:left center;
+      transform:${selected ? "scale(1.15)" : "scale(1)"};transform-origin:center center;
+      transition:transform 0.15s ease;
     ">${label}</div>`,
     iconSize: undefined,
     iconAnchor: [0, 10],
@@ -182,10 +183,10 @@ export default function ListingsMap({ category, location, minPrice, maxPrice, mi
       {/* Legend */}
       <div className="absolute top-4 right-4 rounded-lg bg-background/85 backdrop-blur-sm px-3 py-2 border border-border/40 space-y-1.5">
         {[
-          { color: "#818cf8", label: "Byty – prodej", cat: "byty-prodej" },
-          { color: "#22c55e", label: "Byty – nájem", cat: "byty-najem" },
-          { color: "#f97316", label: "Domy – prodej", cat: "domy-prodej" },
-          { color: "#eab308", label: "Domy – nájem", cat: "domy-najem" },
+          { color: "#A68B3C", label: "Byty – prodej", cat: "byty-prodej" },
+          { color: "#5EBD72", label: "Byty – nájem", cat: "byty-najem" },
+          { color: "#5B8DD9", label: "Domy – prodej", cat: "domy-prodej" },
+          { color: "#D4A843", label: "Domy – nájem", cat: "domy-najem" },
         ]
           .filter(item => !category || item.cat === category)
           .map(item => (

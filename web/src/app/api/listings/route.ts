@@ -80,8 +80,14 @@ export async function GET(req: NextRequest) {
       `SELECT l.id, l.title, l.url, l.location, l.area_m2, l.category, l.dispozice,
         l.price, l.first_seen_at, l.last_seen_at, l.lat, l.lon, l.region_id, l.district_id,
         l.image_url,
-        CASE WHEN l.area_m2 > 0 THEN ROUND(l.price * 1.0 / l.area_m2) ELSE NULL END as price_m2
-       FROM listings l ${where}
+        CASE WHEN l.area_m2 > 0 THEN ROUND(l.price * 1.0 / l.area_m2) ELSE NULL END as price_m2,
+        sd.avg_price_m2 as market_price_m2,
+        CASE WHEN sd.avg_price_m2 > 0 AND l.area_m2 > 0
+          THEN ROUND(((l.price * 1.0 / l.area_m2) - sd.avg_price_m2) / sd.avg_price_m2 * 100, 1)
+          ELSE NULL END as vs_market_pct
+       FROM listings l
+       LEFT JOIN sold_districts sd ON sd.id = l.district_id
+       ${where}
        ORDER BY ${orderBy}
        LIMIT ? OFFSET ?`
     )
